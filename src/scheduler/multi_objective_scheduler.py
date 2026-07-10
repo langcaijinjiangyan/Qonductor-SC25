@@ -12,7 +12,7 @@ from mapomatic import deflate_circuit, matching_layouts
 from numpy import argmin
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.algorithm import Algorithm
-from pymoo.core.problem import StarmapParallelization
+from pymoo.parallelization import StarmapParallelization
 from pymoo.core.result import Result
 from pymoo.mcdm.pseudo_weights import PseudoWeights
 from pymoo.operators.crossover.pntx import TwoPointCrossover

@@ -1,0 +1,332 @@
+[
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.7903567811820342
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            0
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.20964321881796572
+        ],
+        "fidelity_95_percentile": [
+            0.20964321881796572
+        ],
+        "solution_execution_times": [
+            100.1
+        ],
+        "time": "2026-07-01T14:07:16.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.36092689768794983
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            1
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.6390731023120502
+        ],
+        "fidelity_95_percentile": [
+            0.6390731023120502
+        ],
+        "solution_execution_times": [
+            25.78
+        ],
+        "time": "2026-07-01T14:07:26.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.6548639959235866
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            2
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.3451360040764134
+        ],
+        "fidelity_95_percentile": [
+            0.3451360040764134
+        ],
+        "solution_execution_times": [
+            25.78
+        ],
+        "time": "2026-07-01T14:07:36.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.6593610984528286
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            3
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.3406389015471713
+        ],
+        "fidelity_95_percentile": [
+            0.3406389015471713
+        ],
+        "solution_execution_times": [
+            129.57333333333332
+        ],
+        "time": "2026-07-01T14:07:46.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.4977348816171724
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            4
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.5022651183828276
+        ],
+        "fidelity_95_percentile": [
+            0.5022651183828276
+        ],
+        "solution_execution_times": [
+            25.78
+        ],
+        "time": "2026-07-01T14:07:56.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.2801889822411072
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            1
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.7198110177588928
+        ],
+        "fidelity_95_percentile": [
+            0.7198110177588928
+        ],
+        "solution_execution_times": [
+            140.33333333333331
+        ],
+        "time": "2026-07-01T14:08:06.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.4385386424227875
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            2
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.5614613575772125
+        ],
+        "fidelity_95_percentile": [
+            0.5614613575772125
+        ],
+        "solution_execution_times": [
+            97.63333333333333
+        ],
+        "time": "2026-07-01T14:08:16.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.2430283507447507
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            5
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.7569716492552493
+        ],
+        "fidelity_95_percentile": [
+            0.7569716492552493
+        ],
+        "solution_execution_times": [
+            11.466666666666667
+        ],
+        "time": "2026-07-01T14:08:26.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.2858420054948886
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            4
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.7141579945051114
+        ],
+        "fidelity_95_percentile": [
+            0.7141579945051114
+        ],
+        "solution_execution_times": [
+            129.57333333333332
+        ],
+        "time": "2026-07-01T14:08:36.579506+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.31063028284011385
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            5
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.6893697171598862
+        ],
+        "fidelity_95_percentile": [
+            0.6893697171598862
+        ],
+        "solution_execution_times": [
+            76.27333333333333
+        ],
+        "time": "2026-07-01T14:08:46.579506+00:00"
+    }
+]

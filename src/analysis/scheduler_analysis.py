@@ -323,8 +323,8 @@ def generate_job(benchmark_names, random_generator, ncircuits=50, nshots=4000):
         5,
         benchmark_names,
         random_generator,
+        circuit_count,
         nshots,
-        circuit_count=circuit_count
     )
 
 def generate_jobs(njobs=100, ncircuits=50, nshots=4000):
@@ -573,6 +573,6 @@ def plot_fidelity_and_waiting_time():
     plot_path = "plots/scheduling_manager/waiting_time_fidelity.pdf"
     plt.savefig(str(plot_path), bbox_inches="tight", dpi=600)
 
-#generate_jobs()
-#generate_schedules()
+generate_jobs()
+generate_schedules()
 plot_fidelity_and_waiting_time()

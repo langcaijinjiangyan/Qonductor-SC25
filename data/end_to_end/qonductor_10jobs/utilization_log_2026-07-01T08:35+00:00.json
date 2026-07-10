@@ -1,0 +1,320 @@
+[
+    {
+        "time": "2026-07-01T08:34:35.587775+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:36.588319+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:37.588777+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:38.589868+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:39.591309+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:40.591748+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:41.591906+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:42.592185+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:43.592517+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:44.599052+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:45.600473+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:46.600788+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:47.601439+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:48.602555+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:49.602710+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:50.615380+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:51.616197+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:52.616851+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:53.617157+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:54.617240+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:55.617835+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:56.618741+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:57.618957+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:58.619263+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:34:59.621592+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:00.621662+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:01.624227+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:02.624661+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:03.625327+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:04.626462+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:05.627042+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:06.628781+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:07.630142+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:08.631530+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:09.632202+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:10.632360+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:11.632517+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T08:35:12.632645+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:13.632757+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:14.819993+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:15.825521+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:16.825715+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:17.979431+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:18.979586+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T08:35:19.979721+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:20.979815+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:21.979903+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:22.979987+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:23.980072+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:24.986442+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:25.993724+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:27.137142+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T08:35:28.142916+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    }
+]

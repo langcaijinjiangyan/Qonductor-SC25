@@ -1,0 +1,115 @@
+[
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.09999999999999998
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            0
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.9
+        ],
+        "fidelity_95_percentile": [
+            0.9
+        ],
+        "solution_execution_times": [
+            97.00666666666667
+        ],
+        "time": "2026-07-01T08:39:13.385250+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.09999999999999998
+        ],
+        "mean_waiting_time": [
+            0.0
+        ],
+        "solution_index": 0,
+        "solution": [
+            1,
+            2,
+            3,
+            4,
+            5
+        ],
+        "waiting_time_90_percentile": [
+            0.0
+        ],
+        "waiting_time_95_percentile": [
+            0.0
+        ],
+        "fidelity_90_percentile": [
+            0.9
+        ],
+        "fidelity_95_percentile": [
+            0.9
+        ],
+        "solution_execution_times": [
+            46.51999999999999,
+            34.89333333333333,
+            87.23999999999998,
+            97.00666666666667,
+            118.79999999999997
+        ],
+        "time": "2026-07-01T08:39:19.358492+00:00"
+    },
+    {
+        "transpilation_time": 0.0,
+        "estimation_time": 0.0,
+        "optimization_time": 0.0,
+        "mcdm_time": 0.0,
+        "schedule_generation_time": 0.0,
+        "mean_error": [
+            0.09999999999999998
+        ],
+        "mean_waiting_time": [
+            27.558436916666658
+        ],
+        "solution_index": 0,
+        "solution": [
+            6,
+            7,
+            7,
+            2
+        ],
+        "waiting_time_90_percentile": [
+            58.555625366666646
+        ],
+        "waiting_time_95_percentile": [
+            61.134689016666634
+        ],
+        "fidelity_90_percentile": [
+            0.9
+        ],
+        "fidelity_95_percentile": [
+            0.9
+        ],
+        "solution_execution_times": [
+            97.00666666666667,
+            46.51999999999999,
+            118.79999999999997,
+            190.23333333333335
+        ],
+        "time": "2026-07-01T08:39:25.431368+00:00"
+    }
+]

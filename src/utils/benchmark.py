@@ -158,6 +158,15 @@ def get_fake_backends(remove_retired: bool = False) -> list[Backend]:
     return sorted(backends, key=lambda backend: backend.name)
 
 
+# Session-level cache for generated benchmark circuits.
+# Keys are (benchmark_name, circuit_size); each unique combination is
+# generated once via the expensive ``get_benchmark`` call and then
+# shallow-copied on subsequent requests.  Because ``circuit_size`` is
+# bounded (3 – min_backend_size) and the benchmark name list is small
+# (~20 entries), the cache never exceeds ~60 entries.
+_circuit_cache: dict[tuple[str, int], QuantumCircuit] = {}
+
+
 @retry()
 def generate_random_job(
     min_backend_size: int,
@@ -176,16 +185,19 @@ def generate_random_job(
     :return: A random job
     """
     benchmarks = random_generator.choice(benchmark_names, size=circuit_count)
-    circuits = [
-        get_benchmark(
-            benchmark_name=benchmark_name,
-            level="indep",
-            circuit_size=random_generator.integers(
-                low=3, high=min_backend_size, endpoint=True
-            ).item(),
-        )
-        for benchmark_name in benchmarks
-    ]
+    circuits: list[QuantumCircuit] = []
+    for benchmark_name in benchmarks:
+        size = random_generator.integers(
+            low=3, high=min_backend_size, endpoint=True
+        ).item()
+        cache_key = (benchmark_name, size)
+        if cache_key not in _circuit_cache:
+            _circuit_cache[cache_key] = get_benchmark(
+                benchmark_name=benchmark_name,
+                level="indep",
+                circuit_size=size,
+            )
+        circuits.append(_circuit_cache[cache_key].copy())
     return SchedulingJob(circuits, shots)
 
 

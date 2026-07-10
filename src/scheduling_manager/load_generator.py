@@ -27,20 +27,23 @@ class LoadGenerator:
         self,
         queue: Queue,
         data_folder: pathlib.Path,
+        pool_size: int = POOL_SIZE,
     ):
         """
         Initialize the load generator
         :param queue: Queue to submit jobs to
         :param data_folder: Folder to save scheduling statistics to
+        :param pool_size: Number of jobs in the pre-generated pool
         """
         self.scheduler_queue = queue
         self.data_folder = data_folder
+        self.pool_size = pool_size
         self.job_pool = []
         seed = int(os.environ.get("SEED", time.time()))
         self.random_generator = numpy.random.default_rng(seed)
         logger.info("Random seed: %d", seed)
 
-    def run(self, job_count: int = 1000, frequency: int = 1) -> None:
+    def run(self, job_count: int = 1000, frequency: float = 1.0) -> None:
         """
         Run the load generator
         :param job_count: Number of jobs to generate
@@ -78,7 +81,7 @@ class LoadGenerator:
         """
         Generate jobs and add them to the job pool
         """
-        for _ in range(POOL_SIZE):
+        for _ in range(self.pool_size):
             circuit_count = int(self.random_generator.normal(50, 20))
             circuit_count = max(1, min(circuit_count, 100))
             job = generate_random_job(

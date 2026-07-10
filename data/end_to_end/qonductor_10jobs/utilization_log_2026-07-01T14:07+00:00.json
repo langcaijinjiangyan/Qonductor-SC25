@@ -1,0 +1,8 @@
+[
+    {
+        "time": "2026-07-01T14:08:01.403721+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    }
+]

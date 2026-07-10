@@ -1,0 +1,848 @@
+[
+    {
+        "time": "2026-07-01T11:59:12.711325+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:13.711755+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:14.711857+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:15.712526+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:16.714105+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:17.714594+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:18.715783+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:19.715914+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:20.716667+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:21.717849+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:22.718066+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:23.719796+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:24.721185+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:25.721279+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:26.721658+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:27.722658+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:28.725459+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:29.726527+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:30.727066+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:31.737260+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:32.737827+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:33.738508+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:34.738764+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:35.740080+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:36.742329+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:37.742507+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:38.744752+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:39.746166+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:40.746712+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:41.748356+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:42.748546+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:43.750537+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:44.750784+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:45.756829+00:00",
+        "busy_backends": 0,
+        "total_backends": 8,
+        "utilization": 0.0
+    },
+    {
+        "time": "2026-07-01T11:59:46.757024+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:47.757195+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:48.757393+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:49.757582+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:50.757763+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:51.757949+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:52.758142+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:53.763506+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:54.763756+00:00",
+        "busy_backends": 1,
+        "total_backends": 8,
+        "utilization": 12.5
+    },
+    {
+        "time": "2026-07-01T11:59:55.763954+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T11:59:56.764157+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T11:59:57.764348+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T11:59:58.764543+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T11:59:59.764731+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:00.764919+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:01.765115+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:02.765308+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:03.765500+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:04.765673+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:05.771511+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:06.771707+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:07.771896+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:08.772090+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:09.772277+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:10.772470+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:11.772718+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:12.772882+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:13.778283+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:14.778401+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:15.778553+00:00",
+        "busy_backends": 2,
+        "total_backends": 8,
+        "utilization": 25.0
+    },
+    {
+        "time": "2026-07-01T12:00:16.778666+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:17.778774+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:18.778884+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:19.779001+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:20.779110+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:21.779220+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:22.779393+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:23.779559+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:24.779730+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:25.813325+00:00",
+        "busy_backends": 3,
+        "total_backends": 8,
+        "utilization": 37.5
+    },
+    {
+        "time": "2026-07-01T12:00:26.813439+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:27.813594+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:28.813731+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:29.813846+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:30.813961+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:31.814074+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:32.814231+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:33.814437+00:00",
+        "busy_backends": 4,
+        "total_backends": 8,
+        "utilization": 50.0
+    },
+    {
+        "time": "2026-07-01T12:00:34.814583+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:35.814730+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:36.814881+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:37.815023+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:38.815168+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:39.815269+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:40.815363+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:41.815512+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:42.815652+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:43.820874+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:44.974036+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:45.974162+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:46.974278+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:47.974442+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:48.974594+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:49.974677+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:50.974836+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:51.975004+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:52.975173+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:53.975291+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:54.975421+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:55.975583+00:00",
+        "busy_backends": 5,
+        "total_backends": 8,
+        "utilization": 62.5
+    },
+    {
+        "time": "2026-07-01T12:00:56.975682+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:00:57.975796+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:00:58.975908+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:00:59.976071+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:01:00.976229+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:01:01.976396+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:01:02.976476+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:01:03.976623+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:01:04.976772+00:00",
+        "busy_backends": 6,
+        "total_backends": 8,
+        "utilization": 75.0
+    },
+    {
+        "time": "2026-07-01T12:01:05.976892+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:06.977044+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:07.977152+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:08.977310+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:09.977479+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:10.977650+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:11.977818+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:12.977930+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:13.978073+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:14.978197+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:15.978344+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:16.978451+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:17.978555+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:18.978667+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:19.978778+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:20.978883+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:21.978990+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:22.979093+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:23.979201+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:24.979305+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:25.979418+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:26.979521+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:27.979683+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:28.979793+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:29.979897+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:30.979995+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:31.980092+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    },
+    {
+        "time": "2026-07-01T12:01:32.980201+00:00",
+        "busy_backends": 7,
+        "total_backends": 8,
+        "utilization": 87.5
+    }
+]
