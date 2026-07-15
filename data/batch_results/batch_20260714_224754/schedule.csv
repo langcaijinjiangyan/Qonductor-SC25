@@ -1,0 +1,3 @@
+order,workflow_name,workload_type,benchmark,yaml_path,iterations,shots,image_ref
+0,two-local-ansatz-with-random-parameters-batch-20260714-224754-0,two_local_ansatz_with_random_parameters,vqe_two_local,/home/reol/Qonductor-SC25/data/batch_results/batch_20260714_224754/manifests/two-local-ansatz-with-random-parameters-batch-20260714-224754-0.yaml,4,128,7bd89b8201cf
+1,quantum-approximation-optimization-algorithm-qaoa-batch-2026071,quantum_approximation_optimization_algorithm_qaoa,qaoa,/home/reol/Qonductor-SC25/data/batch_results/batch_20260714_224754/manifests/quantum-approximation-optimization-algorithm-qaoa-batch-2026071.yaml,2,128,e2cbd9f606f7

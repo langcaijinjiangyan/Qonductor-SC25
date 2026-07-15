@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+# Install Qiskit and dependencies for quantum circuit execution
+RUN pip install --no-cache-dir \
+    qiskit==2.3.1 \
+    qiskit-aer \
+    qiskit-qasm3-import==0.6.0 \
+    numpy \
+    kubernetes
+
+# Copy the QPU backend module so the executor can load QPU JSON profiles
+COPY src/ /app/src/
+ENV PYTHONPATH=/app
+
+# Entry point: reads QPU JSON, deserialises QASM circuits, executes, outputs results
+COPY docker/quantum_executor_entry.py /entry.py
+ENTRYPOINT ["python", "/entry.py"]

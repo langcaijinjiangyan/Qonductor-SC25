@@ -1,0 +1,197 @@
+# Qonductor Multi-Host k3s-in-Docker Cluster
+
+This directory contains scripts to deploy a **multi-host Kubernetes cluster**
+where **all K8s components run inside Docker containers** — nothing is
+installed on the hosts except Docker itself.
+
+## Architecture
+
+```
+192.168.36.128 (Server)              192.168.36.129 (Agent)
+┌────────────────────────┐           ┌────────────────────────┐
+│ Docker                 │           │ Docker                 │
+│  ┌──────────────────┐  │  TCP 6443 │  ┌──────────────────┐  │
+│  │ k3s-server       │◄─┼───────────┤  │ k3s-agent-1      │  │
+│  │ (control-plane +  │  │ UDP 8472 │  │ (worker)         │  │
+│  │  embedded etcd)   │◄─┼──────────►│  │                  │  │
+│  │ --network host    │  │ Flannel  │  │ --network host   │  │
+│  └──────────────────┘  │   VXLAN   │  └──────────────────┘  │
+└────────────────────────┘           └────────────────────────┘
+```
+
+- **k3s Server** — API server, controller manager, scheduler, embedded
+  etcd/SQLite (via kine shim), kubelet, Flannel CNI.
+- **k3s Agent** — kubelet, kube-proxy, Flannel CNI, containerd.
+- **Host networking** — containers use `--network host` so K8s ports are
+  exposed directly on the physical host IPs.  No nested CNI overhead.
+- **Privileged containers** — required for k3s to create Pod network
+  namespaces and manage cgroups.  Suitable for dev/test; for production
+  consider additional hardening.
+
+## Quick Start
+
+### Prerequisites
+
+- Docker >= 20.10 on all hosts
+- SSH key-based access between hosts
+- `kubectl` and `python3` on the machine running the script
+- Firewall: TCP 6443, UDP 8472, TCP 10250 open between hosts
+
+### 1. Edit the configuration
+
+Edit `docker/multi-host/cluster-config.yaml` to match your topology:
+
+```yaml
+cluster:
+  name: qonductor
+  kubernetesVersion: "v1.32.0-k3s1"
+  k3sToken: "your-secure-token-here"
+  flannelInterface: "eth0"  # or "auto" to auto-detect
+
+server:
+  host: 192.168.36.128
+  nodeName: control-plane-1
+  nodeType: classical
+
+agents:
+  - host: 192.168.36.129
+    nodeName: quantum-worker-1
+    nodeType: quantum
+    qpus:
+      - qpu0_27q.json
+      - qpu1_27q.json
+```
+
+> **IMPORTANT:** Only ONE agent per physical host when using host
+> networking. Two agents on the same host would conflict on kubelet port
+> 10250 and NodePort range 30000-32767.
+
+### 2. Deploy
+
+```bash
+bash docker/multi-host/deploy-cluster.sh
+```
+
+This will:
+1. Validate the configuration and QPU profiles
+2. Start the k3s server container on the server host
+3. Start k3s agent containers on each agent host
+4. Wait for all nodes to join and become Ready
+5. Build Qonductor Docker images and sync them to k3s nodes
+6. Deploy CRDs, operator, and device plugin
+7. Label nodes and configure QPU extended resources
+
+### 3. Verify
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -n default
+
+# Submit a test workflow
+kubectl apply -f deploy/examples/qaoa-12-dynamic-workflow.yaml
+kubectl get hybridworkflows -w
+```
+
+### 4. Tear down
+
+```bash
+# Stop containers, keep data
+bash docker/multi-host/teardown-cluster.sh
+
+# Stop containers AND remove data volumes (DESTRUCTIVE)
+CLEANUP_VOLUMES=1 bash docker/multi-host/teardown-cluster.sh
+```
+
+## Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `deploy-cluster.sh` | Full deployment: server → agents → labels → images → controllers |
+| `teardown-cluster.sh` | Stop/remove all k3s containers and optional cleanup |
+| `sync-images.sh` | Build Qonductor images and import into k3s containerd |
+
+## Environment Variables
+
+### deploy-cluster.sh
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SKIP_FIREWALL` | `0` | Skip firewall port hints |
+| `SKIP_IMAGE_BUILD` | `0` | Skip Docker image build |
+| `SKIP_IMAGE_SYNC` | `0` | Skip image distribution to k3s |
+| `SKIP_CONTROLLERS` | `0` | Skip operator/device-plugin deployment |
+| `DRY_RUN` | `0` | Print commands without executing |
+
+### teardown-cluster.sh
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLEANUP_VOLUMES` | `0` | Also remove Docker data volumes |
+| `CLEANUP_REGISTRY` | `0` | Also remove local Docker registry |
+| `DRY_RUN` | `0` | Print commands without executing |
+
+### sync-images.sh
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BUILD_ONLY` | `0` | Only build images, skip push/import |
+| `SKIP_BUILD` | `0` | Skip Docker image builds |
+| `REGISTRY_PORT` | `5000` | Local Docker registry port |
+
+## Networking
+
+All k3s containers use `--network host`, so the K8s control plane and data
+plane are exposed on the host's network interfaces directly:
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 6443 | TCP | k3s API Server |
+| 8472 | UDP | Flannel VXLAN overlay |
+| 10250 | TCP | Kubelet API |
+
+These ports **must** be reachable between all cluster hosts.
+
+## Image Distribution
+
+Unlike Kind (`kind load docker-image`), k3s uses its own embedded
+containerd. Images must be imported via `ctr images import`:
+
+```bash
+# On the server host:
+docker save qonductor-operator:latest | \
+  docker exec -i k3s-server ctr images import -
+
+# After rebuilding images, re-sync them:
+bash docker/multi-host/sync-images.sh
+```
+
+## Limitations
+
+- **One agent per host** with host networking (port conflicts). Add more
+  physical hosts to scale out worker nodes.
+- **Privileged containers** — acceptable for dev/test but not recommended
+  for production without additional hardening.
+- **No HA control plane** — single k3s server. For HA, configure 3+ servers
+  with embedded etcd.
+- **Kubeconfig** is written to `~/.kube/config` on the execution host,
+  overwriting any existing config. Back up your kubeconfig first if needed.
+
+## Troubleshooting
+
+```bash
+# Server logs
+ssh 192.168.36.128 "docker logs k3s-server --tail 50"
+
+# Agent logs
+ssh 192.168.36.129 "docker logs k3s-agent-1 --tail 50"
+
+# Check Flannel
+kubectl logs -n kube-system -l app=flannel --tail 20
+
+# Check k3s node status
+kubectl get nodes -o wide
+
+# Verify cross-node pod communication
+kubectl run test --image=busybox --restart=Never --rm -it -- \
+  wget -qO- http://<pod-ip-on-other-node>
+```

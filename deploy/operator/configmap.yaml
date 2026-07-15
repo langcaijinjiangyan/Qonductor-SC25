@@ -1,0 +1,36 @@
+# Qonductor Operator configuration.
+# Mirrors the paper's scheduling parameters (§7).
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qonductor-config
+  namespace: default
+  labels:
+    app: qonductor
+data:
+  # Quantum scheduler settings (paper §7)
+  scheduling-interval: "120"     # seconds between forced scheduling cycles
+  scheduling-threshold: "100"    # queue depth triggering immediate scheduling
+
+  # MCDM preference weights (paper §7 Selection)
+  # fidelity: p=(1.0, 0.0); jct: p=(0.0, 1.0); balanced: p=(0.5, 0.5)
+  default-priority: "balanced"
+
+  # Transpilation settings
+  transpilation-level: "pre-transpiled"  # QPU | processor-type | pre-transpiled
+  transpilation-count: "10"              # attempts per circuit
+
+  # Resource Estimator settings (paper §6)
+  resource-plans-count: "3"       # default number of resource plans generated
+
+  # Fault tolerance (§4.1)
+  replicas: "3"                   # 2f+1 with f=1
+  raft-heartbeat-delta: "2s"     # Δ for heartbeat timeout
+
+  # Workflow Registry root
+  registry-root: "/data/workflow-registry"
+
+  # IBM Quantum credentials (optional)
+  # ibm-token: ""
+  # ibm-instance: ""

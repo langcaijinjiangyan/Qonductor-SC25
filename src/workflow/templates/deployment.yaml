@@ -1,0 +1,62 @@
+# Qonductor Hybrid Workflow Deployment Configuration
+# Based on Listing 1 from the Qonductor paper (SC '25).
+#
+# This template defines the computational resources required by a hybrid
+# quantum-classical workflow. Users customize it to request specific QPUs,
+# classical accelerators, and other constraints.
+#
+# Example usage (from paper Listing 1):
+#   spec:
+#     containers:
+#       - name: qaoa-error-mitigated
+#         image: nvidia/cuda:11.0-base
+#         resources:
+#           limits:
+#             nvidia.com/gpu: 1       # Request one GPU
+#       - name: qaoa-algorithm
+#         image: qaoa:latest
+#         resources:
+#           limits:
+#             quantum.ibm.com/qpu: 1  # Request one QPU
+#             qubits: 20               # Request QPU size >= 20
+
+apiVersion: qonductor.io/v1alpha1
+kind: HybridWorkflow
+
+metadata:
+  name: ""        # Workflow name — set at creation time
+  labels:
+    app: qonductor
+
+spec:
+  # Execution priority: "fidelity", "jct", or "balanced"
+  # Corresponds to the MCDM pseudo-weight preference vector (§7 Selection).
+  priority: balanced
+
+  # Maximum number of retries for failed steps.
+  maxRetries: 3
+
+  # Container definitions for each step type.
+  containers: []
+  # Each container entry:
+  #   - name: string            # Descriptive name
+  #   - image: string           # Container image (Docker/OCI)
+  #   - resources:
+  #       limits:
+  #         nvidia.com/gpu: int           # GPU count
+  #         quantum.ibm.com/qpu: int      # QPU count
+  #         qubits: int                   # Minimum qubit count
+  #         memory: string                # RAM (e.g. "4Gi")
+  #         cpu: string                   # CPU (e.g. "2")
+  #   - env: list               # Environment variables
+  #   - command: list           # Override entrypoint
+
+  # Scheduling policy configuration (overrides global defaults).
+  scheduling:
+    classicalPolicy: FilterScore  # K8s standard filter-score
+    quantumPolicy: NSGA2          # NSGA-II multi-objective optimization
+
+  # Error mitigation configuration.
+  errorMitigation:
+    enabled: true
+    stackedTechniques: []  # e.g. ["DD", "REM", "ZNE"]

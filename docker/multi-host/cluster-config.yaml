@@ -1,0 +1,65 @@
+# ============================================================================
+# Qonductor Multi-Host k3s-in-Docker Cluster Configuration
+# ============================================================================
+# This file defines the topology of a hybrid quantum-classical Kubernetes
+# cluster deployed across multiple physical hosts using k3s running inside
+# Docker containers.
+#
+# Architecture:
+#   - One k3s server container (control-plane + embedded etcd/SQLite) on the
+#     server host.
+#   - One or more k3s agent containers (workers) distributed across agent
+#     hosts.
+#   - All components run inside Docker — nothing is installed on the hosts
+#     except Docker itself.
+#
+# IMPORTANT: Only ONE k3s agent per physical host when using host networking.
+#            kubelet (10250) and NodePort (30000-32767) ports would conflict.
+#
+# Usage:
+#   bash docker/multi-host/deploy-cluster.sh          # create the cluster
+#   bash docker/multi-host/teardown-cluster.sh        # destroy the cluster
+#
+# Prerequisites per host:
+#   - Docker >= 20.10
+#   - SSH access from the machine running this script
+#   - TCP 6443, UDP 8472, TCP 10250 open between hosts
+# ============================================================================
+
+# --- Global cluster settings ------------------------------------------------
+cluster:
+  name: qonductor                    # k3s cluster name / context prefix
+  kubernetesVersion: "v1.32.0-k3s1" # rancher/k3s image tag
+  k3sToken: "QonductorS3cretT0ken"  # shared secret for agent join
+  flannelInterface: "ens33"         # physical NIC for Flannel VXLAN
+
+# --- Server node (control-plane + etcd + optional worker) -------------------
+server:
+  host: 192.168.36.128              # physical host IP (SSH target)
+  containerName: k3s-server         # Docker container name
+  nodeName: control-plane-1         # Kubernetes node name
+  nodeType: classical               # Qonductor node role label
+  cpus: 2                           # CPU cores to allocate (optional)
+  memory: 4g                        # RAM to allocate (optional)
+  qpus: []                          # QPU profiles (server is classical)
+
+# --- Agent nodes (workers) --------------------------------------------------
+# Each agent entry = one Docker container on the specified host.
+agents:
+  - host: 192.168.36.129            # physical host IP (SSH target)
+    containerName: k3s-agent-1      # Docker container name
+    nodeName: quantum-worker-1      # Kubernetes node name
+    nodeType: quantum               # Qonductor node role label
+    memory: 8g                      # RAM to allocate
+    cpus: 2                         # CPU cores to allocate
+    qpus:                           # QPU profiles from ../qpus/
+      - qpu0_27q.json
+      - qpu1_27q.json
+
+  - host: 192.168.36.130            # physical host IP (SSH target)
+    containerName: k3s-agent-2      # Docker container name
+    nodeName: classical-worker-2    # Kubernetes node name
+    nodeType: classical             # Qonductor node role label
+    memory: 8g                      # RAM to allocate
+    cpus: 2                         # CPU cores to allocate
+    qpus: []

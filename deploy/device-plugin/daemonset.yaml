@@ -1,0 +1,78 @@
+# QPU Device Plugin DaemonSet
+# Runs one QPU device plugin per worker node.
+# Reports quantum.ibm.com/qpu resources to kubelet.
+#
+# NOTE: Qonductor's device plugin patches Node extended resources via the
+# Kubernetes API directly (see src/operator/device_plugin.py:advertise_resources).
+# The hostPath mount below is reserved for future use of the standard K8s
+# Device Plugin Unix-socket API.
+#
+# kubelet device-plugin socket directory:
+#   Standard K8s / Kind:   /var/lib/kubelet/device-plugins
+#   k3s:                   /var/lib/rancher/k3s/agent/kubelet/device-plugins
+# This manifest targets k3s; change the hostPath for other distributions.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: qonductor-qpu-device-plugin
+  namespace: default
+  labels:
+    app: qonductor
+    component: device-plugin
+spec:
+  selector:
+    matchLabels:
+      app: qonductor
+      component: device-plugin
+  template:
+    metadata:
+      labels:
+        app: qonductor
+        component: device-plugin
+    spec:
+      nodeSelector:
+        qonductor.io/node-type: "quantum"
+      serviceAccountName: qonductor-operator
+      hostNetwork: true
+      containers:
+        - name: device-plugin
+          image: qonductor-device-plugin:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - -m
+            - src.operator.device_plugin
+          env:
+            - name: QONDUCTOR_MODE
+              value: "k8s"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "128Mi"
+            limits:
+              cpu: "100m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: qpu-profiles
+              mountPath: /etc/qonductor/qpus
+              readOnly: true
+      volumes:
+        - name: device-plugin
+          hostPath:
+            # k3s kubelet device-plugin socket path.
+            path: /var/lib/rancher/k3s/agent/kubelet/device-plugins
+        - name: qpu-profiles
+          hostPath:
+            path: /etc/qonductor/qpus
+            type: DirectoryOrCreate
+      tolerations:
+        - key: "qonductor.io/qpu"
+          operator: "Exists"
+          effect: "NoSchedule"

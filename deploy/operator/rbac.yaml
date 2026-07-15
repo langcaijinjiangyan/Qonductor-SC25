@@ -1,0 +1,67 @@
+# RBAC for Qonductor Operator
+# The operator needs permission to:
+# - Watch HybridWorkflow and QuantumJob CRs
+# - Create/update K8s Jobs (classical steps)
+# - Read Nodes (resource awareness)
+# - Read/Write ConfigMaps (calibration data → System Monitor)
+# - Update CR status subresources
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qonductor-operator
+  namespace: default
+  labels:
+    app: qonductor
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: qonductor-operator
+  labels:
+    app: qonductor
+rules:
+  # CRD: HybridWorkflow
+  - apiGroups: ["qonductor.io"]
+    resources: ["hybridworkflows", "hybridworkflows/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # CRD: QuantumJob
+  - apiGroups: ["qonductor.io"]
+    resources: ["quantumjobs", "quantumjobs/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # K8s Jobs (classical steps)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["batch"]
+    resources: ["jobs/status"]
+    verbs: ["get", "list", "watch"]
+  # Nodes (read-only — for resource awareness)
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/status"]
+    verbs: ["get", "list", "watch", "patch"]
+  # ConfigMaps (System Monitor calibration data)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Pods (read-only — for status tracking)
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: qonductor-operator
+  labels:
+    app: qonductor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: qonductor-operator
+subjects:
+  - kind: ServiceAccount
+    name: qonductor-operator
+    namespace: default

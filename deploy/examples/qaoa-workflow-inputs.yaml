@@ -1,0 +1,41 @@
+# Qonductor Hybrid Workflow Example — QAOA with direct code
+# Alternative invocation style: embed the hybrid Python code directly
+# in the CR spec rather than referencing a pre-created workflow image.
+
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: qaoa-direct
+  namespace: default
+  labels:
+    app: qonductor
+spec:
+  workflowImageRef: "auto-generated"
+  priority: balanced
+  containers:
+    - name: error-mitigation
+      image: python:3.11-slim
+      resources:
+        limits:
+          cpu: "4"
+          memory: "8Gi"
+    - name: quantum-execution
+      image: qaoa:latest
+      resources:
+        limits:
+          quantum.ibm.com/qpu: 1
+          qubits: 20
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+  errorMitigation:
+    enabled: true
+  workflowInputs:
+    algorithm: QAOA
+    qubits: 10
+    depth: 1
+    optimizer: COBYLA
+    noise_factors: [1, 3, 5]
+    dd_sequence: XpXm
+    rem_method: matrix_inversion
+    zne_extrapolation: LinearFactory

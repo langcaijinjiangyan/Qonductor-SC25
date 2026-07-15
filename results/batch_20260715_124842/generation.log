@@ -1,0 +1,37 @@
+kubernetes client not available — using local simulation mode
+Discovered 4 workload type(s):
+  - efficient_su2_ansatz_with_random_parameters  (benchmark=vqe_su2, qubits=12)
+  - quantum_approximation_optimization_algorithm_qaoa  (benchmark=qaoa, qubits=12)
+  - real_amplitudes_ansatz_with_random_parameters  (benchmark=vqe_real_amp, qubits=12)
+  - two_local_ansatz_with_random_parameters  (benchmark=vqe_two_local, qubits=12)
+
+Registering workflow images (registry: data/workflow_registry) ...
+  ✓ efficient_su2_ansatz_with_random_parameters                  → image_ref=5ae2d85fc3ef
+  ✓ quantum_approximation_optimization_algorithm_qaoa            → image_ref=03ede6042358
+  ✓ real_amplitudes_ansatz_with_random_parameters                → image_ref=9f1a58fefbc2
+  ✓ two_local_ansatz_with_random_parameters                      → image_ref=592d11c14e0a
+
+Generating 10 manifests ...
+  ... 1/10 manifests generated
+  ... 2/10 manifests generated
+  ... 3/10 manifests generated
+  ... 4/10 manifests generated
+  ... 5/10 manifests generated
+  ... 6/10 manifests generated
+  ... 7/10 manifests generated
+  ... 8/10 manifests generated
+  ... 9/10 manifests generated
+  ... 10/10 manifests generated
+
+============================================================
+Batch generation complete
+  Batch ID:    batch_20260715_124842
+  Manifests:   10  → results/batch_20260715_124842/manifests
+  Schedule:    results/batch_20260715_124842/schedule.csv
+  Output dir:  results/batch_20260715_124842
+  Seed:        None
+============================================================
+
+BATCH_ID=batch_20260715_124842
+SCHEDULE_PATH=results/batch_20260715_124842/schedule.csv
+MANIFEST_COUNT=10

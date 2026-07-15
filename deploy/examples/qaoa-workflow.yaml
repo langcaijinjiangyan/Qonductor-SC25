@@ -1,0 +1,69 @@
+# Qonductor Hybrid Workflow Example — QAOA with Error Mitigation
+# Based on Listing 1 from the Qonductor paper (SC '25).
+#
+# This YAML deploys a QAOA max-cut algorithm with stacked error mitigation:
+# Dynamical Decoupling → Zero-Noise Extrapolation → Readout Error Mitigation
+#
+# Usage:
+#   kubectl apply -f deploy/examples/qaoa-workflow.yaml
+#   kubectl get hybridworkflows -w
+#   kubectl describe hybridworkflow qaoa-error-mitigated
+#   kubectl get quantumjobs
+#   kubectl get jobs
+
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: qaoa-error-mitigated
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: qaoa
+spec:
+  # Reference to the workflow image created via createWorkflow() API.
+  workflowImageRef: ""   # Set to the image_id from workflow registry
+
+  # Scheduling priority (§7 Selection).
+  #   fidelity  — maximise fidelity (may wait longer)
+  #   jct       — minimise completion time (may sacrifice fidelity)
+  #   balanced  — equal weight on both objectives (default)
+  priority: balanced
+
+  maxRetries: 3
+
+  # Container images for classical steps.
+  #   Classical steps (error mitigation pre/post processing) run on GPUs
+  #   via kube-scheduler's Filter-Scoring.
+  #   Quantum steps (QAOA circuit execution) are handled by
+  #   QuantumSchedulerController's NSGA-II scheduler.
+  containers:
+    - name: qaoa-error-mitigated
+      image: nvidia/cuda:11.0-base
+      resources:
+        limits:
+          nvidia.com/gpu: 1       # Request one GPU for ZNE/REM processing
+    - name: qaoa-algorithm
+      image: qaoa:latest
+      resources:
+        limits:
+          quantum.ibm.com/qpu: 1  # Request one QPU (handled by custom scheduler)
+          qubits: 20               # Minimum qubit count
+
+  scheduling:
+    classicalPolicy: FilterScore   # K8s kube-scheduler (native)
+    quantumPolicy: NSGA2           # Qonductor multi-objective NSGA-II
+    schedulingInterval: 120        # seconds
+    schedulingThreshold: 100       # pending jobs
+
+  errorMitigation:
+    enabled: true
+    stackedTechniques:
+      - DD               # Dynamical Decoupling (XpXm sequence)
+      - REM              # Readout Error Mitigation
+      - ZNE              # Zero-Noise Extrapolation (LinearFactory)
+
+  # Inputs passed to the workflow.
+  workflowInputs:
+    qubits: 10
+    optimizer: COBYLA
+    noise_factors: [1, 3, 5]

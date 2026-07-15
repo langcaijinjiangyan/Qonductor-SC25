@@ -1,0 +1,40 @@
+# ============================================================================
+# Qonductor Operator Docker Image
+# ============================================================================
+# Runs the HybridWorkflowController + QuantumSchedulerController as a pod
+# inside the Kind cluster.
+#
+# Build:
+#   docker build -f docker/Dockerfile.operator -t qonductor-operator:latest .
+#   kind load docker-image qonductor-operator:latest --name qonductor
+# ============================================================================
+
+FROM python:3.11-slim
+
+LABEL org.qonductor.component="operator"
+LABEL org.qonductor.version="0.1.0"
+
+# System dependencies.
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        curl         \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install only the dependencies needed by the in-cluster controllers.
+# The full project requirements include training/benchmark extras that pull
+# large GPU stacks into the operator image.
+COPY requirements-operator.txt /tmp/requirements-operator.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-operator.txt
+
+# Copy Qonductor source.
+WORKDIR /app
+COPY src/   /app/src/
+COPY deploy/ /app/deploy/
+COPY data/   /app/data/
+
+ENV PYTHONPATH=/app
+ENV QONDUCTOR_MODE=k8s
+
+# Entry point: the operator controller loop.
+CMD ["python", "-m", "src.operator.controller"]

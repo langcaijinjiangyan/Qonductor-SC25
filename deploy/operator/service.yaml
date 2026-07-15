@@ -1,0 +1,22 @@
+# Qonductor Metrics Service
+# Exposes the operator's embedded HTTP metrics endpoint so that
+# external tools (export_metrics.py, Prometheus, etc.) can scrape
+# scheduling statistics from within the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: qonductor-metrics
+  namespace: default
+  labels:
+    app: qonductor
+    component: operator
+spec:
+  selector:
+    app: qonductor
+    component: operator
+  ports:
+    - name: metrics
+      port: 9100
+      targetPort: 9100
+      protocol: TCP
+  type: ClusterIP

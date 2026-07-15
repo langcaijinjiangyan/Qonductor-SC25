@@ -1,0 +1,36 @@
+# ============================================================================
+# QPU Device Plugin Docker Image
+# ============================================================================
+# Runs as a DaemonSet on quantum-labelled nodes.  Reports
+# quantum.ibm.com/qpu resources to kubelet and periodically refreshes
+# calibration data from the mounted QPU profiles.
+#
+# Build:
+#   docker build -f docker/Dockerfile.device-plugin -t qonductor-device-plugin:latest .
+#   kind load docker-image qonductor-device-plugin:latest --name qonductor
+# ============================================================================
+
+FROM python:3.11-slim
+
+LABEL org.qonductor.component="device-plugin"
+LABEL org.qonductor.version="0.1.0"
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        curl         \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-operator.txt /tmp/requirements-operator.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-operator.txt
+
+WORKDIR /app
+COPY src/   /app/src/
+COPY qpus/  /etc/qonductor/qpus/
+
+ENV PYTHONPATH=/app
+ENV QONDUCTOR_MODE=k8s
+ENV QPU_PROFILES_DIR=/etc/qonductor/qpus
+
+# Entry point: register QPUs and start calibration refresh loop.
+CMD ["python", "-m", "src.operator.device_plugin"]

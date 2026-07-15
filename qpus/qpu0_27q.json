@@ -1,0 +1,871 @@
+{
+  "schema_version": "qpu-config-v1",
+  "profile_version": "v1",
+  "name": "qpu0_27q",
+  "max_qubits": 27,
+  "coupling_map": [
+    [
+      0,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      3,
+      5
+    ],
+    [
+      4,
+      7
+    ],
+    [
+      5,
+      8
+    ],
+    [
+      6,
+      7
+    ],
+    [
+      7,
+      10
+    ],
+    [
+      8,
+      9
+    ],
+    [
+      8,
+      11
+    ],
+    [
+      10,
+      12
+    ],
+    [
+      11,
+      14
+    ],
+    [
+      12,
+      13
+    ],
+    [
+      12,
+      15
+    ],
+    [
+      13,
+      14
+    ],
+    [
+      14,
+      16
+    ],
+    [
+      15,
+      18
+    ],
+    [
+      16,
+      19
+    ],
+    [
+      17,
+      18
+    ],
+    [
+      18,
+      21
+    ],
+    [
+      19,
+      20
+    ],
+    [
+      19,
+      22
+    ],
+    [
+      21,
+      23
+    ],
+    [
+      22,
+      25
+    ],
+    [
+      23,
+      24
+    ],
+    [
+      24,
+      25
+    ],
+    [
+      25,
+      26
+    ]
+  ],
+  "hardware": {
+    "calibration_version": "qpu0-static-v1",
+    "directed_edges": false,
+    "native_single_qubit_gates": [
+      "rz",
+      "sx",
+      "x",
+      "id"
+    ],
+    "native_two_qubit_gate": "cx",
+    "qubits": [
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 34.8,
+          "x": 35.0,
+          "id": 34.7
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018,
+          "x": 0.00026,
+          "id": 0.0002
+        },
+        "readout_duration_ns": 5200.0,
+        "readout_error": 0.0175,
+        "reset_duration_ns": 7100.0,
+        "reset_error": 0.0085,
+        "t1_ns": 128000.0,
+        "t2_ns": 96000.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.15,
+          "x": 35.35,
+          "id": 35.05
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00019,
+          "x": 0.00027,
+          "id": 0.00021
+        },
+        "readout_duration_ns": 5213.0,
+        "readout_error": 0.0179,
+        "reset_duration_ns": 7117.0,
+        "reset_error": 0.0088,
+        "t1_ns": 128750.0,
+        "t2_ns": 96520.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.5,
+          "x": 35.7,
+          "id": 35.4
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0002,
+          "x": 0.00028,
+          "id": 0.00022
+        },
+        "readout_duration_ns": 5226.0,
+        "readout_error": 0.0183,
+        "reset_duration_ns": 7134.0,
+        "reset_error": 0.0091,
+        "t1_ns": 129500.0,
+        "t2_ns": 97040.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.85,
+          "x": 36.05,
+          "id": 35.75
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00021,
+          "x": 0.00029,
+          "id": 0.00023
+        },
+        "readout_duration_ns": 5239.0,
+        "readout_error": 0.0187,
+        "reset_duration_ns": 7151.0,
+        "reset_error": 0.0094,
+        "t1_ns": 130250.0,
+        "t2_ns": 97560.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.2,
+          "x": 36.4,
+          "id": 36.1
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00022,
+          "x": 0.0003,
+          "id": 0.00024
+        },
+        "readout_duration_ns": 5252.0,
+        "readout_error": 0.0191,
+        "reset_duration_ns": 7168.0,
+        "reset_error": 0.0085,
+        "t1_ns": 131000.0,
+        "t2_ns": 98080.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.55,
+          "x": 36.75,
+          "id": 36.45
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00023,
+          "x": 0.00031,
+          "id": 0.00025
+        },
+        "readout_duration_ns": 5265.0,
+        "readout_error": 0.0175,
+        "reset_duration_ns": 7185.0,
+        "reset_error": 0.0088,
+        "t1_ns": 131750.0,
+        "t2_ns": 98600.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 34.8,
+          "x": 35.0,
+          "id": 34.7
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00024,
+          "x": 0.00032,
+          "id": 0.00026
+        },
+        "readout_duration_ns": 5278.0,
+        "readout_error": 0.0179,
+        "reset_duration_ns": 7202.0,
+        "reset_error": 0.0091,
+        "t1_ns": 132500.0,
+        "t2_ns": 99120.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.15,
+          "x": 35.35,
+          "id": 35.05
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018,
+          "x": 0.00026,
+          "id": 0.0002
+        },
+        "readout_duration_ns": 5291.0,
+        "readout_error": 0.0183,
+        "reset_duration_ns": 7219.0,
+        "reset_error": 0.0094,
+        "t1_ns": 133250.0,
+        "t2_ns": 99640.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.5,
+          "x": 35.7,
+          "id": 35.4
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00019,
+          "x": 0.00027,
+          "id": 0.00021
+        },
+        "readout_duration_ns": 5304.0,
+        "readout_error": 0.0187,
+        "reset_duration_ns": 7236.0,
+        "reset_error": 0.0085,
+        "t1_ns": 134000.0,
+        "t2_ns": 100160.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.85,
+          "x": 36.05,
+          "id": 35.75
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0002,
+          "x": 0.00028,
+          "id": 0.00022
+        },
+        "readout_duration_ns": 5317.0,
+        "readout_error": 0.0191,
+        "reset_duration_ns": 7253.0,
+        "reset_error": 0.0088,
+        "t1_ns": 134750.0,
+        "t2_ns": 100680.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.2,
+          "x": 36.4,
+          "id": 36.1
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00021,
+          "x": 0.00029,
+          "id": 0.00023
+        },
+        "readout_duration_ns": 5330.0,
+        "readout_error": 0.0175,
+        "reset_duration_ns": 7270.0,
+        "reset_error": 0.0091,
+        "t1_ns": 135500.0,
+        "t2_ns": 101200.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.55,
+          "x": 36.75,
+          "id": 36.45
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00022,
+          "x": 0.0003,
+          "id": 0.00024
+        },
+        "readout_duration_ns": 5343.0,
+        "readout_error": 0.0179,
+        "reset_duration_ns": 7287.0,
+        "reset_error": 0.0094,
+        "t1_ns": 136250.0,
+        "t2_ns": 101720.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 34.8,
+          "x": 35.0,
+          "id": 34.7
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00023,
+          "x": 0.00031,
+          "id": 0.00025
+        },
+        "readout_duration_ns": 5356.0,
+        "readout_error": 0.0183,
+        "reset_duration_ns": 7304.0,
+        "reset_error": 0.0085,
+        "t1_ns": 137000.0,
+        "t2_ns": 102240.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.15,
+          "x": 35.35,
+          "id": 35.05
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00024,
+          "x": 0.00032,
+          "id": 0.00026
+        },
+        "readout_duration_ns": 5369.0,
+        "readout_error": 0.0187,
+        "reset_duration_ns": 7321.0,
+        "reset_error": 0.0088,
+        "t1_ns": 137750.0,
+        "t2_ns": 102760.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.5,
+          "x": 35.7,
+          "id": 35.4
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018,
+          "x": 0.00026,
+          "id": 0.0002
+        },
+        "readout_duration_ns": 5382.0,
+        "readout_error": 0.0191,
+        "reset_duration_ns": 7338.0,
+        "reset_error": 0.0091,
+        "t1_ns": 138500.0,
+        "t2_ns": 103280.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.85,
+          "x": 36.05,
+          "id": 35.75
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00019,
+          "x": 0.00027,
+          "id": 0.00021
+        },
+        "readout_duration_ns": 5395.0,
+        "readout_error": 0.0175,
+        "reset_duration_ns": 7355.0,
+        "reset_error": 0.0094,
+        "t1_ns": 139250.0,
+        "t2_ns": 103800.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.2,
+          "x": 36.4,
+          "id": 36.1
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0002,
+          "x": 0.00028,
+          "id": 0.00022
+        },
+        "readout_duration_ns": 5408.0,
+        "readout_error": 0.0179,
+        "reset_duration_ns": 7372.0,
+        "reset_error": 0.0085,
+        "t1_ns": 140000.0,
+        "t2_ns": 104320.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.55,
+          "x": 36.75,
+          "id": 36.45
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00021,
+          "x": 0.00029,
+          "id": 0.00023
+        },
+        "readout_duration_ns": 5421.0,
+        "readout_error": 0.0183,
+        "reset_duration_ns": 7389.0,
+        "reset_error": 0.0088,
+        "t1_ns": 140750.0,
+        "t2_ns": 104840.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 34.8,
+          "x": 35.0,
+          "id": 34.7
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00022,
+          "x": 0.0003,
+          "id": 0.00024
+        },
+        "readout_duration_ns": 5434.0,
+        "readout_error": 0.0187,
+        "reset_duration_ns": 7406.0,
+        "reset_error": 0.0091,
+        "t1_ns": 141500.0,
+        "t2_ns": 105360.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.15,
+          "x": 35.35,
+          "id": 35.05
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00023,
+          "x": 0.00031,
+          "id": 0.00025
+        },
+        "readout_duration_ns": 5447.0,
+        "readout_error": 0.0191,
+        "reset_duration_ns": 7423.0,
+        "reset_error": 0.0094,
+        "t1_ns": 142250.0,
+        "t2_ns": 105880.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.5,
+          "x": 35.7,
+          "id": 35.4
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00024,
+          "x": 0.00032,
+          "id": 0.00026
+        },
+        "readout_duration_ns": 5460.0,
+        "readout_error": 0.0175,
+        "reset_duration_ns": 7440.0,
+        "reset_error": 0.0085,
+        "t1_ns": 143000.0,
+        "t2_ns": 106400.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.85,
+          "x": 36.05,
+          "id": 35.75
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018,
+          "x": 0.00026,
+          "id": 0.0002
+        },
+        "readout_duration_ns": 5473.0,
+        "readout_error": 0.0179,
+        "reset_duration_ns": 7457.0,
+        "reset_error": 0.0088,
+        "t1_ns": 143750.0,
+        "t2_ns": 106920.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.2,
+          "x": 36.4,
+          "id": 36.1
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00019,
+          "x": 0.00027,
+          "id": 0.00021
+        },
+        "readout_duration_ns": 5486.0,
+        "readout_error": 0.0183,
+        "reset_duration_ns": 7474.0,
+        "reset_error": 0.0091,
+        "t1_ns": 144500.0,
+        "t2_ns": 107440.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 36.55,
+          "x": 36.75,
+          "id": 36.45
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0002,
+          "x": 0.00028,
+          "id": 0.00022
+        },
+        "readout_duration_ns": 5499.0,
+        "readout_error": 0.0187,
+        "reset_duration_ns": 7491.0,
+        "reset_error": 0.0094,
+        "t1_ns": 145250.0,
+        "t2_ns": 107960.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 34.8,
+          "x": 35.0,
+          "id": 34.7
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00021,
+          "x": 0.00029,
+          "id": 0.00023
+        },
+        "readout_duration_ns": 5512.0,
+        "readout_error": 0.0191,
+        "reset_duration_ns": 7508.0,
+        "reset_error": 0.0085,
+        "t1_ns": 146000.0,
+        "t2_ns": 108480.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.15,
+          "x": 35.35,
+          "id": 35.05
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00022,
+          "x": 0.0003,
+          "id": 0.00024
+        },
+        "readout_duration_ns": 5525.0,
+        "readout_error": 0.0175,
+        "reset_duration_ns": 7525.0,
+        "reset_error": 0.0088,
+        "t1_ns": 146750.0,
+        "t2_ns": 109000.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 35.5,
+          "x": 35.7,
+          "id": 35.4
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00023,
+          "x": 0.00031,
+          "id": 0.00025
+        },
+        "readout_duration_ns": 5538.0,
+        "readout_error": 0.0179,
+        "reset_duration_ns": 7542.0,
+        "reset_error": 0.0091,
+        "t1_ns": 147500.0,
+        "t2_ns": 109520.0
+      }
+    ],
+    "edges": [
+      {
+        "source": 0,
+        "target": 1,
+        "gate": "cx",
+        "duration_ns": 405.0,
+        "error": 0.0068
+      },
+      {
+        "source": 1,
+        "target": 2,
+        "gate": "cx",
+        "duration_ns": 409.5,
+        "error": 0.00705
+      },
+      {
+        "source": 1,
+        "target": 4,
+        "gate": "cx",
+        "duration_ns": 414.0,
+        "error": 0.0073
+      },
+      {
+        "source": 2,
+        "target": 3,
+        "gate": "cx",
+        "duration_ns": 418.5,
+        "error": 0.00755
+      },
+      {
+        "source": 3,
+        "target": 5,
+        "gate": "cx",
+        "duration_ns": 423.0,
+        "error": 0.0078
+      },
+      {
+        "source": 4,
+        "target": 7,
+        "gate": "cx",
+        "duration_ns": 427.5,
+        "error": 0.00805
+      },
+      {
+        "source": 5,
+        "target": 8,
+        "gate": "cx",
+        "duration_ns": 432.0,
+        "error": 0.0068
+      },
+      {
+        "source": 6,
+        "target": 7,
+        "gate": "cx",
+        "duration_ns": 436.5,
+        "error": 0.00705
+      },
+      {
+        "source": 7,
+        "target": 10,
+        "gate": "cx",
+        "duration_ns": 405.0,
+        "error": 0.0073
+      },
+      {
+        "source": 8,
+        "target": 9,
+        "gate": "cx",
+        "duration_ns": 409.5,
+        "error": 0.00755
+      },
+      {
+        "source": 8,
+        "target": 11,
+        "gate": "cx",
+        "duration_ns": 414.0,
+        "error": 0.0078
+      },
+      {
+        "source": 10,
+        "target": 12,
+        "gate": "cx",
+        "duration_ns": 418.5,
+        "error": 0.00805
+      },
+      {
+        "source": 11,
+        "target": 14,
+        "gate": "cx",
+        "duration_ns": 423.0,
+        "error": 0.0068
+      },
+      {
+        "source": 12,
+        "target": 13,
+        "gate": "cx",
+        "duration_ns": 427.5,
+        "error": 0.00705
+      },
+      {
+        "source": 12,
+        "target": 15,
+        "gate": "cx",
+        "duration_ns": 432.0,
+        "error": 0.0073
+      },
+      {
+        "source": 13,
+        "target": 14,
+        "gate": "cx",
+        "duration_ns": 436.5,
+        "error": 0.00755
+      },
+      {
+        "source": 14,
+        "target": 16,
+        "gate": "cx",
+        "duration_ns": 405.0,
+        "error": 0.0078
+      },
+      {
+        "source": 15,
+        "target": 18,
+        "gate": "cx",
+        "duration_ns": 409.5,
+        "error": 0.00805
+      },
+      {
+        "source": 16,
+        "target": 19,
+        "gate": "cx",
+        "duration_ns": 414.0,
+        "error": 0.0068
+      },
+      {
+        "source": 17,
+        "target": 18,
+        "gate": "cx",
+        "duration_ns": 418.5,
+        "error": 0.00705
+      },
+      {
+        "source": 18,
+        "target": 21,
+        "gate": "cx",
+        "duration_ns": 423.0,
+        "error": 0.0073
+      },
+      {
+        "source": 19,
+        "target": 20,
+        "gate": "cx",
+        "duration_ns": 427.5,
+        "error": 0.00755
+      },
+      {
+        "source": 19,
+        "target": 22,
+        "gate": "cx",
+        "duration_ns": 432.0,
+        "error": 0.0078
+      },
+      {
+        "source": 21,
+        "target": 23,
+        "gate": "cx",
+        "duration_ns": 436.5,
+        "error": 0.00805
+      },
+      {
+        "source": 22,
+        "target": 25,
+        "gate": "cx",
+        "duration_ns": 405.0,
+        "error": 0.0068
+      },
+      {
+        "source": 23,
+        "target": 24,
+        "gate": "cx",
+        "duration_ns": 409.5,
+        "error": 0.00705
+      },
+      {
+        "source": 24,
+        "target": 25,
+        "gate": "cx",
+        "duration_ns": 414.0,
+        "error": 0.0073
+      },
+      {
+        "source": 25,
+        "target": 26,
+        "gate": "cx",
+        "duration_ns": 418.5,
+        "error": 0.00755
+      }
+    ]
+  }
+}

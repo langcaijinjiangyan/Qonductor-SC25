@@ -1,0 +1,165 @@
+# QuantumJob Custom Resource Definition
+# Each DAG quantum node is materialised as a QuantumJob CR.
+# The QuantumSchedulerController watches these, runs NSGA-II scheduling,
+# and assigns a QPU backend.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: quantumjobs.qonductor.io
+  labels:
+    app: qonductor
+spec:
+  group: qonductor.io
+  names:
+    kind: QuantumJob
+    singular: quantumjob
+    plural: quantumjobs
+    shortNames:
+      - qj
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [workflowRef, stepId, qubits]
+              properties:
+                workflowRef:
+                  type: string
+                  description: Name of the parent HybridWorkflow CR.
+                stepId:
+                  type: string
+                  description: Corresponding DAGNode.step_id.
+                label:
+                  type: string
+                  description: Human-readable step label.
+                qubits:
+                  type: integer
+                  minimum: 1
+                  description: Minimum qubits required.
+                shots:
+                  type: integer
+                  default: 4000
+                circuitNames:
+                  type: array
+                  items: {type: string}
+                  description: Quantum circuit names from the library.
+                logicalCircuitId:
+                  type: string
+                  description: Logical circuit identifier from the workload qspec.
+                circuitQasm:
+                  type: string
+                  description: Inline OpenQASM payload for this quantum evaluation.
+                circuitFormat:
+                  type: string
+                  enum: [qasm2, qasm3]
+                  default: qasm2
+                qasmPath:
+                  type: string
+                  description: Optional source path for provenance/debugging.
+                parameterBindings:
+                  type: object
+                  additionalProperties:
+                    type: number
+                  description: Parameter values used to bind a parameterized circuit.
+                iteration:
+                  type: integer
+                  minimum: 0
+                  description: Dynamic optimizer iteration that produced this job.
+                evalLabel:
+                  type: string
+                  description: Dynamic optimizer evaluation label, e.g. plus/minus.
+                scheduleImmediately:
+                  type: boolean
+                  default: false
+                  description: Trigger the quantum scheduler as soon as this job is enqueued.
+                priority:
+                  type: string
+                  enum: [fidelity, jct, balanced]
+                  default: balanced
+                assignedQPU:
+                  type: string
+                  description: >
+                    Populated by the scheduler after assignment.
+                    Empty until scheduling completes.
+                estimatedFidelity:
+                  type: number
+                  description: Estimated Hellinger fidelity from resource estimator.
+                estimatedExecutionTime:
+                  type: number
+                  description: Estimated execution time in seconds.
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Scheduling
+                    - Scheduled
+                    - Running
+                    - Completed
+                    - Failed
+                assignedQPU:
+                  type: string
+                executionJob:
+                  type: string
+                  description: K8s Job created to execute this quantum circuit.
+                scheduledAt:
+                  type: string
+                  format: date-time
+                  description: When NSGA-II assigned this job to a QPU.
+                estimatedFidelity:
+                  type: number
+                  description: Estimated Hellinger fidelity computed by the scheduler.
+                estimatedExecutionTime:
+                  type: number
+                  description: Estimated execution time in seconds.
+                actualFidelity:
+                  type: number
+                actualExecutionTime:
+                  type: number
+                result:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: {type: string}
+                      status: {type: string}
+                      reason: {type: string}
+                      message: {type: string}
+                      lastTransitionTime: {type: string, format: date-time}
+      additionalPrinterColumns:
+        - name: Workflow
+          type: string
+          jsonPath: .spec.workflowRef
+        - name: Qubits
+          type: integer
+          jsonPath: .spec.qubits
+        - name: AssignedQPU
+          type: string
+          jsonPath: .status.assignedQPU
+        - name: Fidelity
+          type: number
+          jsonPath: .status.estimatedFidelity
+        - name: ExecTime
+          type: number
+          jsonPath: .status.actualExecutionTime
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

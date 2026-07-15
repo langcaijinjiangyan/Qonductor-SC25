@@ -1,0 +1,194 @@
+# HybridWorkflow Custom Resource Definition
+# Based on Qonductor paper Listing 1 and Section 5.
+# Users submit this CR to deploy a hybrid quantum-classical workflow.
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: hybridworkflows.qonductor.io
+  labels:
+    app: qonductor
+spec:
+  group: qonductor.io
+  names:
+    kind: HybridWorkflow
+    singular: hybridworkflow
+    plural: hybridworkflows
+    shortNames:
+      - hwf
+      - qwf
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [workflowImageRef]
+              properties:
+                workflowImageRef:
+                  type: string
+                  description: >
+                    Reference to a pre-created workflow image ID in the
+                    Workflow Registry.  Corresponds to the image_id returned
+                    by createWorkflow().
+                priority:
+                  type: string
+                  enum: [fidelity, jct, balanced]
+                  default: balanced
+                  description: >
+                    MCDM pseudo-weight preference vector (§7 Selection).
+                    fidelity  → p=(1.0, 0.0)  maximise fidelity only
+                    jct       → p=(0.0, 1.0)  minimise completion time only
+                    balanced  → p=(0.5, 0.5)  equal weight (default)
+                maxRetries:
+                  type: integer
+                  default: 3
+                  minimum: 0
+                  maximum: 10
+                containers:
+                  type: array
+                  description: >
+                    Container image definitions for classical steps.
+                    Quantum steps delegate QPU selection to the scheduler.
+                  items:
+                    type: object
+                    required: [name, image]
+                    properties:
+                      name:
+                        type: string
+                      image:
+                        type: string
+                      resources:
+                        type: object
+                        properties:
+                          limits:
+                            type: object
+                            properties:
+                              cpu:
+                                type: string
+                                pattern: '^[0-9]+(\.[0-9]+)?$'
+                              memory:
+                                type: string
+                                pattern: '^[0-9]+(\.[0-9]+)?[KMGTP]i?$'
+                              nvidia.com/gpu:
+                                type: integer
+                              quantum.ibm.com/qpu:
+                                type: integer
+                            qubits:
+                              type: integer
+                              description: Minimum qubit count for QPU selection
+                      command:
+                        type: array
+                        items:
+                          type: string
+                      env:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name: {type: string}
+                            value: {type: string}
+                scheduling:
+                  type: object
+                  properties:
+                    classicalPolicy:
+                      type: string
+                      enum: [FilterScore]
+                      default: FilterScore
+                      description: >
+                        Classical scheduling policy.  FilterScore delegates
+                        to the K8s native kube-scheduler.
+                    quantumPolicy:
+                      type: string
+                      enum: [NSGA2]
+                      default: NSGA2
+                      description: >
+                        Quantum scheduling policy.  NSGA2 uses the
+                        multi-objective genetic algorithm.
+                    schedulingInterval:
+                      type: integer
+                      default: 120
+                      description: Scheduling interval in seconds (§7 triggers).
+                    schedulingThreshold:
+                      type: integer
+                      default: 100
+                      description: >
+                        Queue size that triggers immediate scheduling (§7).
+                errorMitigation:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    stackedTechniques:
+                      type: array
+                      items:
+                        type: string
+                        enum: [DD, REM, ZNE, PEC, PauliTwirling]
+                workflowInputs:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Key-value inputs for the workflow execution.
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Running
+                    - Completed
+                    - Failed
+                stepsCompleted:
+                  type: integer
+                totalSteps:
+                  type: integer
+                currentStep:
+                  type: string
+                  description: Label of the currently executing step.
+                classicalStepCount:
+                  type: integer
+                  description: Number of CLASSICAL DAG steps.
+                quantumStepCount:
+                  type: integer
+                  description: Number of QUANTUM DAG steps.
+                averageFidelity:
+                  type: number
+                  description: Average fidelity across all completed quantum steps.
+                totalWaitingTime:
+                  type: number
+                  description: Aggregate waiting time across all quantum steps (seconds).
+                totalExecutionTime:
+                  type: number
+                  description: Aggregate execution time across all steps (seconds).
+                results:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type: {type: string}
+                      status: {type: string}
+                      reason: {type: string}
+                      message: {type: string}
+                      lastTransitionTime: {type: string, format: date-time}
+      additionalPrinterColumns:
+        - name: Status
+          type: string
+          jsonPath: .status.phase
+        - name: Steps
+          type: string
+          jsonPath: .status.stepsCompleted
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp

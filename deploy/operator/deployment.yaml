@@ -1,0 +1,71 @@
+# Qonductor Operator Deployment
+# Runs the HybridWorkflowController and QuantumSchedulerController
+# as a single pod (leader-elected for HA via Raft).
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qonductor-operator
+  namespace: default
+  labels:
+    app: qonductor
+    component: operator
+spec:
+  replicas: 1  # Leader election via Raft (§4.1 fault tolerance)
+  selector:
+    matchLabels:
+      app: qonductor
+      component: operator
+  template:
+    metadata:
+      labels:
+        app: qonductor
+        component: operator
+    spec:
+      serviceAccountName: qonductor-operator
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+      containers:
+        - name: operator
+          image: qonductor-operator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          command:
+            - python
+            - -m
+            - src.operator.controller
+          env:
+            - name: QONDUCTOR_MODE
+              value: "k8s"
+            - name: QONDUCTOR_CONFIG
+              value: "/etc/qonductor/config.yaml"
+            - name: PYTHONPATH
+              value: "."
+            - name: QONDUCTOR_REGISTRY_ROOT
+              value: "/data/workflow_registry"
+            - name: QISKIT_PARALLEL
+              value: "False"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/qonductor
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: qonductor-config
+        - name: data
+          hostPath:
+            path: /home/reol/Qonductor-SC25/data
+            type: DirectoryOrCreate
