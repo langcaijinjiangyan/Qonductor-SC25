@@ -282,12 +282,19 @@ class HybridWorkflowController:
                     cr_name,
                 )
 
-        return {
+        final_result = {
             "phase": "Failed" if first_error else "Completed",
             "steps_completed": step_index,
             "total_steps": len(nodes),
             "results": results,
         }
+        self.k8s.update_cr_status(HYBRID_WORKFLOW_PLURAL, cr_name, {
+            "phase": final_result["phase"],
+            "stepsCompleted": final_result["steps_completed"],
+            "totalSteps": final_result["total_steps"],
+            "results": final_result["results"],
+        })
+        return final_result
 
     def _aggregate_workflow_metrics(
         self, workflow_name: str, nodes: list,

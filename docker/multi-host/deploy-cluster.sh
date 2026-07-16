@@ -54,10 +54,10 @@ QPUS_DIR="${PROJECT_ROOT}/qpus"
 DEPLOY_DIR="${PROJECT_ROOT}/deploy"
 
 # ---- Flags -------------------------------------------------------------------
-SKIP_FIREWALL="${SKIP_FIREWALL:-0}"
+SKIP_FIREWALL="${SKIP_FIREWALL:-1}"
 SKIP_TEARDOWN="${SKIP_TEARDOWN:-0}"
 CLEANUP_VOLUMES="${CLEANUP_VOLUMES:-1}"
-CLEANUP_RANCHER="${CLEANUP_RANCHER:-1}"
+CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
 SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
 SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-0}"
 SKIP_CONTAINERD_IMPORT="${SKIP_CONTAINERD_IMPORT:-0}"
@@ -198,6 +198,30 @@ _read_image_list() {
     else
         _get_all_images
     fi
+}
+
+_load_image_list() {
+    local -n _out="$1"
+    mapfile -t _out < <(_read_image_list)
+    [[ "${#_out[@]}" -gt 0 ]] || die "No images resolved from ${IMAGE_LIST_FILE} or built-in image list."
+}
+
+_require_docker_images() {
+    local host="$1"; shift
+    local missing=()
+
+    for img in "$@"; do
+        if ! _remote "$host" "docker image inspect '${img}' >/dev/null 2>&1"; then
+            missing+=("$img")
+        fi
+    done
+
+    if [[ "${#missing[@]}" -gt 0 ]]; then
+        warn "Missing Docker image(s) on ${host}:"
+        printf '  - %s\n' "${missing[@]}"
+        return 1
+    fi
+    return 0
 }
 
 # ==============================================================================
@@ -411,7 +435,14 @@ prepare_images() {
     _banner "Phase 2: Prepare images"
 
     if [[ "$SKIP_IMAGE_BUILD" == "1" ]]; then
-        warn "SKIP_IMAGE_BUILD=1 — assuming images are already present locally."
+        local -a images
+        _load_image_list images
+        warn "SKIP_IMAGE_BUILD=1 — skipping local build/load."
+        if [[ "$SKIP_IMAGE_DISTRIBUTE" != "1" ]]; then
+            log "Verifying local Docker has images needed for distribution …"
+            _require_docker_images "localhost" "${images[@]}" || \
+                die "SKIP_IMAGE_BUILD=1 requires all images in local Docker unless SKIP_IMAGE_DISTRIBUTE=1."
+        fi
         return 0
     fi
 
@@ -447,20 +478,26 @@ prepare_images() {
 distribute_images() {
     _banner "Phase 3: Distribute images to all hosts"
 
-    if [[ "$SKIP_IMAGE_DISTRIBUTE" == "1" ]]; then
-        warn "SKIP_IMAGE_DISTRIBUTE=1 — skipping distribution."
-        return 0
-    fi
-
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
 
     local -a images
-    mapfile -t images < <(_read_image_list)
+    _load_image_list images
+
+    if [[ "$SKIP_IMAGE_DISTRIBUTE" == "1" ]]; then
+        warn "SKIP_IMAGE_DISTRIBUTE=1 — verifying images are already present on every host."
+        for host in "${hosts[@]}"; do
+            _require_docker_images "$host" "${images[@]}" || \
+                die "SKIP_IMAGE_DISTRIBUTE=1 requires all images to be present on ${host}."
+        done
+        return 0
+    fi
 
     for host in "${hosts[@]}"; do
         if _is_local "$host"; then
-            log "Skipping localhost ${host} (images already present)"
+            log "Verifying localhost ${host} already has required images …"
+            _require_docker_images "$host" "${images[@]}" || \
+                die "Local host ${host} is part of the cluster but is missing required images."
             continue
         fi
 
@@ -554,7 +591,7 @@ deploy_server() {
 
 wait_for_server() {
     local host="${SERVER_HOST}"
-    local max_attempts=30 delay=10
+    local max_attempts=30 delay=3
 
     log "Waiting for k3s API server on ${host}:6443 …"
 
@@ -579,9 +616,37 @@ fetch_kubeconfig() {
     local tmp_kubeconfig="/tmp/k3s-multi-host-config.yaml"
 
     if _is_local "$host"; then
+        # docker cp to LOCAL filesystem writes the actual file content (not tar).
         docker cp "${container_name}:/etc/rancher/k3s/k3s.yaml" "$tmp_kubeconfig"
     else
-        ssh "$host" "docker cp ${container_name}:/etc/rancher/k3s/k3s.yaml -" > "$tmp_kubeconfig"
+        # Two-step copy for remote hosts:
+        #   1. docker cp to a temp file on the remote HOST filesystem.
+        #      docker cp from a remote container to a LOCAL path (where "local"
+        #      is the remote host) writes the raw file — not a tar archive.
+        #   2. scp the raw file back to the deploy machine.
+        #      scp is purpose-built for binary-clean file transfer over SSH
+        #      and is immune to MOTD/banner injection.
+        #
+        # The original approach ("docker cp … -" piped over ssh stdout) wrote a
+        # TAR ARCHIVE (not file content) to the local file — docker cp uses tar
+        # format when stdout is the destination.  This produced a file full of
+        # null bytes, which kubectl rejected as "control characters not allowed".
+        local remote_tmp="/tmp/k3s-multi-host-config-remote.yaml"
+        _run "$host" "docker cp '${container_name}:/etc/rancher/k3s/k3s.yaml' '${remote_tmp}'"
+        scp -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+            "${host}:${remote_tmp}" "$tmp_kubeconfig"
+        _run "$host" "rm -f '${remote_tmp}'"
+    fi
+
+    # Verify the fetched file is a valid kubeconfig.
+    local first_line
+    first_line="$(head -1 "$tmp_kubeconfig")"
+    if [[ "$first_line" != "apiVersion:"* ]]; then
+        warn "Kubeconfig does not start with 'apiVersion:' — file may be corrupted:"
+        echo ""
+        head -20 "$tmp_kubeconfig"
+        echo ""
+        die "Kubeconfig is invalid (first line: '${first_line}')."
     fi
 
     # Replace 127.0.0.1 with the server's actual IP.
@@ -668,10 +733,34 @@ deploy_agents() {
 
 wait_for_nodes() {
     log "Waiting for all nodes to become Ready …"
-    kubectl wait --for=condition=Ready nodes --all --timeout=180s 2>/dev/null || {
-        warn "Not all nodes Ready yet — showing current status:"
-        kubectl get nodes -o wide
-    }
+
+    local -a expected_nodes=("${SERVER_NODENAME}")
+    for ((i = 0; i < AGENTS_COUNT; i++)); do
+        local node_var="AGENTS_${i}_NODENAME"
+        expected_nodes+=("${!node_var}")
+    done
+
+    for node_name in "${expected_nodes[@]}"; do
+        local waited=0
+        local delay=3
+
+        while ! kubectl get node "$node_name" >/dev/null 2>&1; do
+            if [[ "$waited" -ge 300 ]]; then
+                warn "Node ${node_name} did not join the cluster — showing current status:"
+                kubectl get nodes -o wide
+                die "All configured nodes must join before proceeding. Check node status above."
+            fi
+            sleep "$delay"
+            waited=$((waited + delay))
+        done
+
+        kubectl wait --for=condition=Ready "node/${node_name}" --timeout=300s 2>/dev/null || {
+            warn "Node ${node_name} did not become Ready — showing current status:"
+            kubectl get nodes -o wide
+            die "All configured nodes must join and become Ready before proceeding. Check node status above."
+        }
+    done
+
     log "  ✓ Nodes:"
     kubectl get nodes -o wide
 }
@@ -689,10 +778,14 @@ import_containerd() {
     fi
 
     local -a images
-    mapfile -t images < <(_read_image_list)
+    _load_image_list images
 
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
+
+    local -a import_pids=()
+    local -a import_labels=()
+    local failures=0
 
     for host in "${hosts[@]}"; do
         local container; container="$(_container_for_host "$host")" || {
@@ -706,20 +799,37 @@ import_containerd() {
             continue
         fi
 
-        log "Importing ${#images[@]} images into ${container} on ${host} …"
+        log "Queueing import of ${#images[@]} images into ${container} on ${host} …"
+        _require_docker_images "$host" "${images[@]}" || \
+            die "Cannot import into ${container}: required image(s) missing from Docker on ${host}."
 
-        # Save all images as a single tar and pipe into containerd.
+        # Save images on the target host and pipe into that host's k3s
+        # containerd. This keeps SKIP_IMAGE_DISTRIBUTE useful when images were
+        # pre-loaded directly on remote hosts.
         # Multi-image tar is supported by `ctr images import`.
         if [[ "$DRY_RUN" == "1" ]]; then
-            echo "  [dry-run] docker save ${images[*]} | ssh ${host} docker exec -i ${container} ctr images import -"
+            echo "  [dry-run] ${host}: docker save ${images[*]} | docker exec -i ${container} ctr images import -"
         else
-            docker save "${images[@]}" 2>/dev/null | \
-                _remote "$host" "docker exec -i '${container}' ctr images import - 2>/dev/null" && \
-                log "  ✓ ${host}:${container} done" || \
-                warn "  Some imports to ${container} may have failed (duplicates OK)"
+            (
+                _remote "$host" "docker save ${images[*]} 2>/dev/null | docker exec -i '${container}' ctr images import - 2>/dev/null"
+            ) &
+            import_pids+=("$!")
+            import_labels+=("${host}:${container}")
         fi
     done
 
+    for i in "${!import_pids[@]}"; do
+        local pid="${import_pids[$i]}"
+        local label="${import_labels[$i]}"
+        if wait "$pid"; then
+            log "  ✓ ${label} done"
+        else
+            warn "  ${label} import failed"
+            failures=$((failures + 1))
+        fi
+    done
+
+    [[ "$failures" -eq 0 ]] || die "${failures} containerd import task(s) failed"
     log "  ✓ Containerd import complete"
 }
 
@@ -818,18 +928,24 @@ deploy_qonductor_controllers() {
 
     log "Deploying Qonductor operator and device plugin …"
 
+    local rendered_operator
+    rendered_operator="$(mktemp /tmp/qonductor-operator-deployment.XXXXXX.yaml)"
+    sed "s|__QONDUCTOR_DATA_PATH__|${PROJECT_ROOT}/data|g" \
+        "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"
+
     kubectl apply -f "${DEPLOY_DIR}/operator/rbac.yaml"
     kubectl apply -f "${DEPLOY_DIR}/operator/configmap.yaml"
-    kubectl apply -f "${DEPLOY_DIR}/operator/deployment.yaml"
+    kubectl apply -f "$rendered_operator"
+    rm -f "$rendered_operator"
     kubectl apply -f "${DEPLOY_DIR}/device-plugin/daemonset.yaml"
 
     log "Waiting for Qonductor operator rollout …"
     kubectl rollout status deployment/qonductor-operator \
-        -n default --timeout=180s || warn "Operator rollout did not finish before timeout"
+        -n default --timeout=180s || die "Operator rollout failed — check 'kubectl describe deployment qonductor-operator'"
 
     log "Waiting for QPU device-plugin rollout …"
     kubectl rollout status daemonset/qonductor-qpu-device-plugin \
-        -n default --timeout=180s || warn "Device-plugin rollout did not finish before timeout"
+        -n default --timeout=300s || die "Device-plugin rollout failed — check 'kubectl describe daemonset qonductor-qpu-device-plugin'"
 
     log "  ✓ Qonductor controllers deployed"
 }

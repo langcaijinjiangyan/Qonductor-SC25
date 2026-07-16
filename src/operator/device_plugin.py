@@ -187,14 +187,15 @@ class QPUDevicePlugin:
             "qpu_name": qpu_name,
             "num_qubits": str(qpu_data.get("max_qubits", "")),
         }
+        cm_labels = {"app": "qonductor", "component": "qpu-profile"}
         try:
             # Try update first (ConfigMap already exists from a previous run).
-            self.k8s.update_configmap(cm_name, cm_data)
+            self.k8s.update_configmap(cm_name, cm_data, labels=cm_labels)
             logger.debug("Updated ConfigMap '%s'", cm_name)
         except Exception:
             # ConfigMap doesn't exist yet — create it.
             try:
-                self.k8s.create_configmap(cm_name, cm_data)
+                self.k8s.create_configmap(cm_name, cm_data, labels=cm_labels)
                 logger.info("Created ConfigMap '%s' for QPU '%s'", cm_name, qpu_name)
             except Exception:
                 logger.exception(

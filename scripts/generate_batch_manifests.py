@@ -28,6 +28,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import re
@@ -62,6 +63,18 @@ def _k8s_name(value: str) -> str:
     name = re.sub(r"[^a-z0-9-]+", "-", value.lower().replace("_", "-"))
     name = re.sub(r"-+", "-", name).strip("-")
     return name[:63].rstrip("-") or "workflow"
+
+
+def _batch_workflow_name(workload_name: str, batch_id: str, index: int) -> str:
+    """Build a unique, valid Kubernetes name for a batch workflow."""
+    base = _k8s_name(f"{workload_name}-{batch_id}")
+    digest = hashlib.sha1(
+        f"{workload_name}-{batch_id}-{index:04d}".encode("utf-8")
+    ).hexdigest()[:8]
+    suffix = f"{digest}-{index:04d}"
+    prefix_len = 63 - len(suffix) - 1
+    prefix = base[:prefix_len].rstrip("-") or "workflow"
+    return f"{prefix}-{suffix}"
 
 
 def _py_name(value: str) -> str:
@@ -253,7 +266,7 @@ def main() -> None:
         # Round to a multiple of 128 (common shot quantisation)
         task_shots = max(128, ((args.shots + shot_variation) // 128) * 128)
 
-        workflow_name = _k8s_name(f"{wl_name}-{args.batch_id}-{i:04d}")
+        workflow_name = _batch_workflow_name(wl_name, args.batch_id, i)
         yaml_filename = f"{workflow_name}.yaml"
         yaml_path = manifests_dir / yaml_filename
 

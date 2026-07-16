@@ -121,8 +121,10 @@ class _LocalStore:
     def list_nodes(self) -> list[dict]:
         return list(self.nodes.values())
 
-    def create_configmap(self, name: str, data: dict) -> dict:
-        cm = {"metadata": {"name": name}, "data": data}
+    def create_configmap(
+        self, name: str, data: dict, labels: dict | None = None,
+    ) -> dict:
+        cm = {"metadata": {"name": name, "labels": labels or {}}, "data": data}
         self.configmaps[name] = cm
         return cm
 
@@ -147,9 +149,13 @@ class _LocalStore:
                 result.append(cm)
         return result
 
-    def update_configmap(self, name: str, data: dict) -> dict:
+    def update_configmap(
+        self, name: str, data: dict, labels: dict | None = None,
+    ) -> dict:
         """Update an existing ConfigMap."""
         cm = self.configmaps.get(name, {"metadata": {"name": name}})
+        if labels is not None:
+            cm.setdefault("metadata", {})["labels"] = labels
         cm["data"] = data
         self.configmaps[name] = cm
         return cm
@@ -566,13 +572,17 @@ class K8sClient:
     # -- ConfigMap operations (System Monitor calibration data) -----------
 
     def create_configmap(self, name: str, data: dict,
+                         labels: dict | None = None,
                          namespace: str = "default") -> dict:
         if self.mode == "k8s" and self._core_api:
             return self._core_api.create_namespaced_config_map(
                 namespace=namespace,
-                body={"metadata": {"name": name}, "data": data},
+                body={
+                    "metadata": {"name": name, "labels": labels or {}},
+                    "data": data,
+                },
             )
-        return self._store.create_configmap(name, data)
+        return self._store.create_configmap(name, data, labels=labels)
 
     def get_configmap(self, name: str) -> Optional[dict]:
         if self.mode == "k8s" and self._core_api:
@@ -601,14 +611,18 @@ class K8sClient:
         return self._store.list_configmaps(label_selector)
 
     def update_configmap(self, name: str, data: dict,
+                         labels: dict | None = None,
                          namespace: str = "default") -> dict:
         """Update an existing ConfigMap (replace data)."""
         if self.mode == "k8s" and self._core_api:
-            return self._core_api.replace_namespaced_config_map(
+            body = {"data": data}
+            if labels is not None:
+                body["metadata"] = {"labels": labels}
+            return self._core_api.patch_namespaced_config_map(
                 name=name, namespace=namespace,
-                body={"metadata": {"name": name}, "data": data},
+                body=body,
             )
-        return self._store.update_configmap(name, data)
+        return self._store.update_configmap(name, data, labels=labels)
 
     def list_jobs(self, label_selector: str = "") -> list[dict]:
         """List K8s Jobs, optionally filtered by label selector."""
