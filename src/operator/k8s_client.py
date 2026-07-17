@@ -52,8 +52,10 @@ _MEMORY_UNITS = {
 # Try to import the real K8s client; fall back to local simulation.
 try:
     from kubernetes import client, config, watch
+    from kubernetes.client.rest import ApiException
     _HAS_K8S = True
 except ImportError:
+    ApiException = None  # type: ignore
     _HAS_K8S = False
     logger.warning("kubernetes client not available — using local simulation mode")
 
@@ -476,16 +478,64 @@ class K8sClient:
 
     def watch_cr(self, kind: str) -> Iterator[dict]:
         """Generator yielding {"type": "ADDED"/"MODIFIED"/"DELETED", "object": ...}."""
-        if self.mode == "k8s" and _HAS_K8S:
+        if self.mode == "k8s" and _HAS_K8S and self._custom_api:
             plural = (HYBRID_WORKFLOW_PLURAL if "workflow" in kind.lower()
                       else QUANTUM_JOB_PLURAL)
-            w = watch.Watch()
-            for event in w.stream(
-                _get_k8s_custom_api().list_namespaced_custom_object,
-                group=HYBRID_WORKFLOW_GROUP, version=HYBRID_WORKFLOW_VERSION,
-                namespace="default", plural=plural,
-            ):
-                yield event
+            resource_version = ""
+            backoff_seconds = 1.0
+
+            while True:
+                try:
+                    listed = self._custom_api.list_namespaced_custom_object(
+                        group=HYBRID_WORKFLOW_GROUP,
+                        version=HYBRID_WORKFLOW_VERSION,
+                        namespace="default",
+                        plural=plural,
+                        resource_version=resource_version or None,
+                    )
+                    resource_version = (
+                        listed.get("metadata", {}).get("resourceVersion", "")
+                    )
+                    for obj in listed.get("items", []):
+                        yield {"type": "ADDED", "object": obj}
+
+                    w = watch.Watch()
+                    for event in w.stream(
+                        self._custom_api.list_namespaced_custom_object,
+                        group=HYBRID_WORKFLOW_GROUP,
+                        version=HYBRID_WORKFLOW_VERSION,
+                        namespace="default",
+                        plural=plural,
+                        resource_version=resource_version or None,
+                        timeout_seconds=300,
+                    ):
+                        obj = event.get("object", {})
+                        rv = obj.get("metadata", {}).get("resourceVersion")
+                        if rv:
+                            resource_version = rv
+                        backoff_seconds = 1.0
+                        yield event
+                except Exception as exc:
+                    status = getattr(exc, "status", None)
+                    if ApiException is not None and isinstance(exc, ApiException) and status == 410:
+                        logger.warning(
+                            "Watch for %s expired at resourceVersion=%s; "
+                            "relisting and reconnecting",
+                            plural,
+                            resource_version or "<initial>",
+                        )
+                        resource_version = ""
+                        backoff_seconds = 1.0
+                        continue
+
+                    logger.warning(
+                        "Watch for %s failed: %s; retrying in %.1fs",
+                        plural,
+                        exc,
+                        backoff_seconds,
+                    )
+                    time.sleep(backoff_seconds)
+                    backoff_seconds = min(backoff_seconds * 2, 30.0)
         yield from self._store.watch(kind)
 
     # -- Node operations --------------------------------------------------
@@ -849,6 +899,7 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
             },
         },
         "spec": {
+            "backoffLimit": int(cr.get("spec", {}).get("maxRetries", 100)),
             "template": {
                 "metadata": {"labels": {"app": "qonductor-classical"}},
                 "spec": pod_spec,

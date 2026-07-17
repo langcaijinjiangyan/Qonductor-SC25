@@ -1,0 +1,16 @@
+{
+  "benchmark": "qaoa",
+  "mqt_bench_version": "2.2.3",
+  "num_clbits": 6,
+  "num_qubits": 6,
+  "parameter_count": 4,
+  "parameter_names": [
+    "_b_0_",
+    "_b_1_",
+    "_g_0_",
+    "_g_1_"
+  ],
+  "qasm_file": "qaoa_indep_qiskit_6.qasm3",
+  "qiskit_version": "2.5.0",
+  "source_note": "Generated from uploaded 6-qubit MQTBench random-parameter QASM and converted back to symbolic input parameters matching the hybrid C driver."
+}

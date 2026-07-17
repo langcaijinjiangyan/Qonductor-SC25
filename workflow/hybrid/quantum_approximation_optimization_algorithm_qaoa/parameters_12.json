@@ -1,0 +1,15 @@
+{
+  "benchmark": "qaoa",
+  "mqt_bench_version": "2.2.2",
+  "num_clbits": 12,
+  "num_qubits": 12,
+  "parameter_count": 4,
+  "parameter_names": [
+    "_b_0_",
+    "_b_1_",
+    "_g_0_",
+    "_g_1_"
+  ],
+  "qasm_file": "qaoa_12.qasm3",
+  "qiskit_version": "2.4.2"
+}

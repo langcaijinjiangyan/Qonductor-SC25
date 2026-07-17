@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "qnode": "20",
+  "circuits": {
+    "wstate_indep_qiskit_20": "wstate_indep_qiskit_20.qasm"
+  },
+  "hybrid_job": false
+}

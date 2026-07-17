@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "qnode": "8",
+  "circuits": {
+    "qpeinexact_indep_qiskit_8": "qpeinexact_indep_qiskit_8.qasm"
+  },
+  "hybrid_job": false
+}

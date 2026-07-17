@@ -73,7 +73,7 @@ def build_workflow_image(name: str, driver_image: str) -> WorkflowImage:
         step_type=StepType.CLASSICAL,
         label="qaoa_spsa_driver",
         code=DRIVER_CODE,
-        resource_requirements={"cpu": 1, "memory": "2Gi"},
+        resource_requirements={"cpu": 1, "memory": "1Gi"},
         metadata={"dynamic_quantum_jobs": True},
     )
     dag.add_node(node)
@@ -85,7 +85,7 @@ def build_workflow_image(name: str, driver_image: str) -> WorkflowImage:
                 {
                     "name": "qaoa-spsa-driver",
                     "image": driver_image,
-                    "resources": {"limits": {"cpu": "1", "memory": "2Gi"}},
+                    "resources": {"limits": {"cpu": "1", "memory": "1Gi"}},
                 }
             ],
             "scheduling": {

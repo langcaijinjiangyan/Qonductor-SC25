@@ -1,0 +1,48 @@
+{
+  "source": "MQTBench 6q random-parameter QASM converted to symbolic parameterized workload",
+  "benchmark": "qaoa",
+  "folder": "quantum_approximation_optimization_algorithm_qaoa",
+  "logical_id": "qaoa_indep_qiskit_6",
+  "qasm_file": "qaoa_indep_qiskit_6.qasm3",
+  "num_qubits": 6,
+  "num_clbits": 6,
+  "parameter_count": 4,
+  "parameter_names": [
+    "_b_0_",
+    "_b_1_",
+    "_g_0_",
+    "_g_1_"
+  ],
+  "input_qasm_uploaded": "qaoa_indep_qiskit_6.qasm3",
+  "converted_to_symbolic": true,
+  "edges": [
+    [
+      0,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      3
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      0,
+      4
+    ],
+    [
+      0,
+      5
+    ],
+    [
+      4,
+      5
+    ]
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "qnode": "16",
+  "circuits": {
+    "ghz_indep_qiskit_16": "ghz_indep_qiskit_16.qasm"
+  },
+  "hybrid_job": false
+}

@@ -155,6 +155,18 @@ def main() -> None:
         help="Scheduling priority (default: balanced)",
     )
     parser.add_argument(
+        "--quantum-timeout-seconds",
+        type=float,
+        default=21600.0,
+        help="Max seconds a classical driver waits for each QuantumJob (default: 21600)",
+    )
+    parser.add_argument(
+        "--poll-seconds",
+        type=float,
+        default=5.0,
+        help="Seconds between QuantumJob status polls in drivers (default: 5)",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=None,
@@ -277,6 +289,8 @@ def main() -> None:
                 shots=task_shots,
                 max_iterations=iterations,
                 priority=args.priority,
+                quantum_timeout_seconds=args.quantum_timeout_seconds,
+                poll_seconds=args.poll_seconds,
             )
         else:
             inputs = build_ansatz_workflow_inputs(
@@ -284,6 +298,8 @@ def main() -> None:
                 shots=task_shots,
                 max_iterations=iterations,
                 priority=args.priority,
+                quantum_timeout_seconds=args.quantum_timeout_seconds,
+                poll_seconds=args.poll_seconds,
             )
 
         # Retrieve the pre-registered image and build the manifest

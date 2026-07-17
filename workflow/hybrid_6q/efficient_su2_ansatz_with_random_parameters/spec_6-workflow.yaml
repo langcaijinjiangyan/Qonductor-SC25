@@ -1,0 +1,163 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: efficient-su2-ansatz-with-random-parameters-spec-6-dynamic
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: vqe-su2
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 3b08f18099d7
+  priority: balanced
+  maxRetries: 3
+  containers:
+  - name: vqe-spsa-driver
+    image: qonductor-operator:latest
+    resources:
+      limits:
+        cpu: '1'
+        memory: 1Gi
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 120
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    vqe_su2:
+      logicalCircuitId: su2random_indep_qiskit_6
+      qasmPath: /home/reol/Qonductor-SC25/workflow/hybrid_6q/efficient_su2_ansatz_with_random_parameters/su2random_indep_qiskit_6.qasm3
+      circuitQasm: "OPENQASM 3.0;\ninclude \"stdgates.inc\";\ninput float[64] _\u03B8\
+        _0_;\ninput float[64] _\u03B8_1_;\ninput float[64] _\u03B8_2_;\ninput float[64]\
+        \ _\u03B8_3_;\ninput float[64] _\u03B8_4_;\ninput float[64] _\u03B8_5_;\n\
+        input float[64] _\u03B8_6_;\ninput float[64] _\u03B8_7_;\ninput float[64]\
+        \ _\u03B8_8_;\ninput float[64] _\u03B8_9_;\ninput float[64] _\u03B8_10_;\n\
+        input float[64] _\u03B8_11_;\ninput float[64] _\u03B8_12_;\ninput float[64]\
+        \ _\u03B8_13_;\ninput float[64] _\u03B8_14_;\ninput float[64] _\u03B8_15_;\n\
+        input float[64] _\u03B8_16_;\ninput float[64] _\u03B8_17_;\ninput float[64]\
+        \ _\u03B8_18_;\ninput float[64] _\u03B8_19_;\ninput float[64] _\u03B8_20_;\n\
+        input float[64] _\u03B8_21_;\ninput float[64] _\u03B8_22_;\ninput float[64]\
+        \ _\u03B8_23_;\ninput float[64] _\u03B8_24_;\ninput float[64] _\u03B8_25_;\n\
+        input float[64] _\u03B8_26_;\ninput float[64] _\u03B8_27_;\ninput float[64]\
+        \ _\u03B8_28_;\ninput float[64] _\u03B8_29_;\ninput float[64] _\u03B8_30_;\n\
+        input float[64] _\u03B8_31_;\ninput float[64] _\u03B8_32_;\ninput float[64]\
+        \ _\u03B8_33_;\ninput float[64] _\u03B8_34_;\ninput float[64] _\u03B8_35_;\n\
+        input float[64] _\u03B8_36_;\ninput float[64] _\u03B8_37_;\ninput float[64]\
+        \ _\u03B8_38_;\ninput float[64] _\u03B8_39_;\ninput float[64] _\u03B8_40_;\n\
+        input float[64] _\u03B8_41_;\ninput float[64] _\u03B8_42_;\ninput float[64]\
+        \ _\u03B8_43_;\ninput float[64] _\u03B8_44_;\ninput float[64] _\u03B8_45_;\n\
+        input float[64] _\u03B8_46_;\ninput float[64] _\u03B8_47_;\nbit[6] meas;\n\
+        qubit[6] q;\nry(_\u03B8_0_) q[0];\nrz(_\u03B8_1_) q[0];\nry(_\u03B8_2_) q[1];\n\
+        rz(_\u03B8_3_) q[1];\nry(_\u03B8_4_) q[2];\nrz(_\u03B8_5_) q[2];\nry(_\u03B8\
+        _6_) q[3];\nrz(_\u03B8_7_) q[3];\nry(_\u03B8_8_) q[4];\nrz(_\u03B8_9_) q[4];\n\
+        ry(_\u03B8_10_) q[5];\nrz(_\u03B8_11_) q[5];\ncx q[4], q[5];\ncx q[3], q[4];\n\
+        cx q[2], q[3];\ncx q[1], q[2];\ncx q[0], q[1];\nry(_\u03B8_12_) q[0];\nrz(_\u03B8\
+        _13_) q[0];\nry(_\u03B8_14_) q[1];\nrz(_\u03B8_15_) q[1];\nry(_\u03B8_16_)\
+        \ q[2];\nrz(_\u03B8_17_) q[2];\nry(_\u03B8_18_) q[3];\nrz(_\u03B8_19_) q[3];\n\
+        ry(_\u03B8_20_) q[4];\nrz(_\u03B8_21_) q[4];\nry(_\u03B8_22_) q[5];\nrz(_\u03B8\
+        _23_) q[5];\ncx q[4], q[5];\ncx q[3], q[4];\ncx q[2], q[3];\ncx q[1], q[2];\n\
+        cx q[0], q[1];\nry(_\u03B8_24_) q[0];\nrz(_\u03B8_25_) q[0];\nry(_\u03B8_26_)\
+        \ q[1];\nrz(_\u03B8_27_) q[1];\nry(_\u03B8_28_) q[2];\nrz(_\u03B8_29_) q[2];\n\
+        ry(_\u03B8_30_) q[3];\nrz(_\u03B8_31_) q[3];\nry(_\u03B8_32_) q[4];\nrz(_\u03B8\
+        _33_) q[4];\nry(_\u03B8_34_) q[5];\nrz(_\u03B8_35_) q[5];\ncx q[4], q[5];\n\
+        cx q[3], q[4];\ncx q[2], q[3];\ncx q[1], q[2];\ncx q[0], q[1];\nry(_\u03B8\
+        _36_) q[0];\nrz(_\u03B8_37_) q[0];\nry(_\u03B8_38_) q[1];\nrz(_\u03B8_39_)\
+        \ q[1];\nry(_\u03B8_40_) q[2];\nrz(_\u03B8_41_) q[2];\nry(_\u03B8_42_) q[3];\n\
+        rz(_\u03B8_43_) q[3];\nry(_\u03B8_44_) q[4];\nrz(_\u03B8_45_) q[4];\nry(_\u03B8\
+        _46_) q[5];\nrz(_\u03B8_47_) q[5];\nbarrier q[0], q[1], q[2], q[3], q[4],\
+        \ q[5];\nmeas[0] = measure q[0];\nmeas[1] = measure q[1];\nmeas[2] = measure\
+        \ q[2];\nmeas[3] = measure q[3];\nmeas[4] = measure q[4];\nmeas[5] = measure\
+        \ q[5];\n"
+      circuitFormat: qasm3
+      parameterNames:
+      - "_\u03B8_0_"
+      - "_\u03B8_1_"
+      - "_\u03B8_2_"
+      - "_\u03B8_3_"
+      - "_\u03B8_4_"
+      - "_\u03B8_5_"
+      - "_\u03B8_6_"
+      - "_\u03B8_7_"
+      - "_\u03B8_8_"
+      - "_\u03B8_9_"
+      - "_\u03B8_10_"
+      - "_\u03B8_11_"
+      - "_\u03B8_12_"
+      - "_\u03B8_13_"
+      - "_\u03B8_14_"
+      - "_\u03B8_15_"
+      - "_\u03B8_16_"
+      - "_\u03B8_17_"
+      - "_\u03B8_18_"
+      - "_\u03B8_19_"
+      - "_\u03B8_20_"
+      - "_\u03B8_21_"
+      - "_\u03B8_22_"
+      - "_\u03B8_23_"
+      - "_\u03B8_24_"
+      - "_\u03B8_25_"
+      - "_\u03B8_26_"
+      - "_\u03B8_27_"
+      - "_\u03B8_28_"
+      - "_\u03B8_29_"
+      - "_\u03B8_30_"
+      - "_\u03B8_31_"
+      - "_\u03B8_32_"
+      - "_\u03B8_33_"
+      - "_\u03B8_34_"
+      - "_\u03B8_35_"
+      - "_\u03B8_36_"
+      - "_\u03B8_37_"
+      - "_\u03B8_38_"
+      - "_\u03B8_39_"
+      - "_\u03B8_40_"
+      - "_\u03B8_41_"
+      - "_\u03B8_42_"
+      - "_\u03B8_43_"
+      - "_\u03B8_44_"
+      - "_\u03B8_45_"
+      - "_\u03B8_46_"
+      - "_\u03B8_47_"
+      parameterCount: 48
+      qubits: 6
+      clbits: 6
+      shots: 16
+      maxIterations: 1
+      priority: balanced
+      seed: 12345
+      source:
+        workloadDir: /home/reol/Qonductor-SC25/workflow/hybrid_6q/efficient_su2_ansatz_with_random_parameters
+        spec: /home/reol/Qonductor-SC25/workflow/hybrid_6q/efficient_su2_ansatz_with_random_parameters/spec_6.json
+        parameters: /home/reol/Qonductor-SC25/workflow/hybrid_6q/efficient_su2_ansatz_with_random_parameters/parameters_6.json
+      objective: ising_energy
+      hamiltonian:
+        hField:
+        - 0.7
+        - -0.45
+        - 0.32
+        - -0.58
+        - 0.91
+        - -0.27
+        - 0.63
+        - -0.74
+        - 0.18
+        - 0.52
+        - -0.36
+        - 0.81
+        hCoupling:
+        - -1.05
+        - 0.86
+        - -0.67
+        - 0.49
+        - -0.92
+        - 0.73
+        - -0.54
+        - 1.11
+        - -0.38
+        - 0.64
+        - -0.79
+        - 0.57
+        topology: ring

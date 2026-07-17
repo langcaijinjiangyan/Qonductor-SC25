@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "qnode": "4",
+  "circuits": {
+    "grover-v-chain_indep_qiskit_4": "grover-v-chain_indep_qiskit_4.qasm"
+  },
+  "hybrid_job": false
+}

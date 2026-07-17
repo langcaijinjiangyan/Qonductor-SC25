@@ -60,6 +60,8 @@ def build_ansatz_workflow_inputs(
     shots: int = 1024,
     max_iterations: int = 200,
     priority: str = "balanced",
+    quantum_timeout_seconds: float = 21600.0,
+    poll_seconds: float = 5.0,
 ) -> dict[str, Any]:
     workload_dir = Path(workload_dir)
     spec, params, logical_id, qasm_path, qasm_text = _read_workload_payload(workload_dir)
@@ -79,6 +81,8 @@ def build_ansatz_workflow_inputs(
             "clbits": params.get("num_clbits", params.get("num_qubits", 12)),
             "shots": shots,
             "maxIterations": max_iterations,
+            "quantumTimeoutSeconds": quantum_timeout_seconds,
+            "pollSeconds": poll_seconds,
             "priority": priority,
             "objective": "ising_energy",
             "hamiltonian": {
@@ -107,7 +111,7 @@ def build_ansatz_workflow_image(
         step_type=StepType.CLASSICAL,
         label="vqe_spsa_driver",
         code=VQE_DRIVER_CODE,
-        resource_requirements={"cpu": 1, "memory": "2Gi"},
+        resource_requirements={"cpu": 1, "memory": "1Gi"},
         metadata={"dynamic_quantum_jobs": True},
     )
     dag.add_node(node)
@@ -120,7 +124,7 @@ def build_ansatz_workflow_image(
                     "name": "vqe-spsa-driver",
                     "image": driver_image,
                     "resources": {
-                        "limits": {"cpu": "1", "memory": "2Gi"},
+                        "limits": {"cpu": "1", "memory": "1Gi"},
                     },
                 }
             ],

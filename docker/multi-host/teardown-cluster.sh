@@ -13,8 +13,9 @@
 #   CLEANUP_IMAGES=0     skip removing Qonductor & k3s Docker images (default: 1)
 #   CLEANUP_REGISTRY=0   skip removing the local Docker registry container (default: 1)
 #   CLEANUP_RANCHER=0    skip removing /etc/rancher (default: 1, cleans stale passwords)
-#   CLEANUP_QONDUCTOR=0  skip removing /etc/qonductor (default: 1)
-#   DRY_RUN=1            print commands without executing
+#   CLEANUP_QONDUCTOR=0     skip removing /etc/qonductor (default: 1)
+#   CLEANUP_IMAGES_TAR=0    skip removing images.tar (default: 0, preserve the image bundle)
+#   DRY_RUN=1               print commands without executing
 # ============================================================================
 
 set -euo pipefail
@@ -27,6 +28,7 @@ CLEANUP_REGISTRY="${CLEANUP_REGISTRY:-1}"
 CLEANUP_IMAGES="${CLEANUP_IMAGES:-1}"
 CLEANUP_RANCHER="${CLEANUP_RANCHER:-1}"
 CLEANUP_QONDUCTOR="${CLEANUP_QONDUCTOR:-1}"
+CLEANUP_IMAGES_TAR="${CLEANUP_IMAGES_TAR:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -383,11 +385,15 @@ main() {
     local workflow_registry="${PROJECT_ROOT:-${SCRIPT_DIR}/../..}/data/workflow_registry"
 
     if [[ -f "$images_tar" ]]; then
-        if [[ "$DRY_RUN" == "1" ]]; then
-            echo "  [dry-run] Remove ${images_tar}"
+        if [[ "$CLEANUP_IMAGES_TAR" == "1" ]]; then
+            if [[ "$DRY_RUN" == "1" ]]; then
+                echo "  [dry-run] Remove ${images_tar}"
+            else
+                rm -f "$images_tar"
+                log "  ✓ ${images_tar} removed"
+            fi
         else
-            rm -f "$images_tar"
-            log "  ✓ ${images_tar} removed"
+            log "  Preserving ${images_tar} (set CLEANUP_IMAGES_TAR=1 to remove)"
         fi
     fi
 
@@ -423,6 +429,9 @@ main() {
     fi
     if [[ "$CLEANUP_QONDUCTOR" != "1" ]]; then
         warn "/etc/qonductor was preserved. Set CLEANUP_QONDUCTOR=1 to remove stale QPU state."
+    fi
+    if [[ "$CLEANUP_IMAGES_TAR" != "1" ]]; then
+        warn "images.tar was preserved. Set CLEANUP_IMAGES_TAR=1 to remove it."
     fi
     echo ""
 }

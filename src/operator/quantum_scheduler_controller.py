@@ -60,6 +60,19 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _json_safe(value: Any) -> Any:
+    """Convert scheduler metadata to CR-status-safe JSON values."""
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
 @dataclass
 class _PendingQuantumJob:
     """Internal representation of a pending quantum job."""
@@ -320,8 +333,16 @@ class QuantumSchedulerController:
     def _enqueue(self, cr: dict) -> None:
         """Add a QuantumJob CR to the pending queue."""
         spec = cr.get("spec", {})
+        cr_name = cr["metadata"]["name"]
+        if any(item.cr_name == cr_name for item in self._pending):
+            logger.debug(
+                "QuantumJob %s already pending; skipping duplicate event",
+                cr_name,
+            )
+            return
+
         qj = _PendingQuantumJob(
-            cr_name=cr["metadata"]["name"],
+            cr_name=cr_name,
             step_id=spec.get("stepId", ""),
             workflow_ref=spec.get("workflowRef", ""),
             qubits=spec.get("qubits", 10),
@@ -513,6 +534,7 @@ class QuantumSchedulerController:
             assignments, rejected, metadata = self.scheduler.schedule(
                 scheduling_jobs, self._backends, weights=weights,
             )
+        metadata = _json_safe(metadata or {})
 
         # ---- Stage 3: Selection (MCDM) ----
         # Assign QPU, update CR, and dispatch K8s Job for circuit execution.
@@ -523,6 +545,13 @@ class QuantumSchedulerController:
         # Extract per-job estimates from scheduler metadata
         solution_fidelities = metadata.get("solution_fidelities", [])
         solution_exec_times = metadata.get("solution_execution_times", [])
+        scheduler_metadata = {
+            **metadata,
+            "backend_names": [getattr(backend, "name", "") for backend in self._backends],
+            "job_count": len(pending),
+            "assigned_count": len(assignments),
+            "rejected_count": len(pending) - len(assignments),
+        }
 
         now_ts = _now_iso()
         for idx, ((job, backend), qj) in enumerate(
@@ -546,6 +575,7 @@ class QuantumSchedulerController:
                 "estimated_fidelity": est_fidelity,
                 "estimated_execution_time": est_exec_time,
                 "arrived_at": qj.arrived_at,
+                "scheduling_metadata": scheduler_metadata,
             }
             self._scheduling_results[qj.step_id] = result_entry
             cycle_results[qj.step_id] = result_entry
@@ -557,6 +587,7 @@ class QuantumSchedulerController:
                 "scheduledAt": now_ts,
                 "estimatedFidelity": est_fidelity,
                 "estimatedExecutionTime": est_exec_time,
+                "schedulingMetadata": scheduler_metadata,
             })
 
             # Dispatch a K8s Job to execute the circuit on the assigned

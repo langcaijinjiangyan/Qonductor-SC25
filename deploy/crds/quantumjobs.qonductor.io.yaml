@@ -124,6 +124,10 @@ spec:
                 estimatedExecutionTime:
                   type: number
                   description: Estimated execution time in seconds.
+                schedulingMetadata:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                  description: Full NSGA-II scheduling metadata for this scheduling cycle.
                 actualFidelity:
                   type: number
                 actualExecutionTime:

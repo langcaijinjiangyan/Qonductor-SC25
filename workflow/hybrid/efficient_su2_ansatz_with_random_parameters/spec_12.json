@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "qnode": "12",
+  "circuits": {
+    "su2random_indep_qiskit_12": "su2random_indep_qiskit_12.qasm3"
+  },
+  "hybrid_job": true
+}

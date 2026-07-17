@@ -31,7 +31,7 @@ cluster:
   name: qonductor                    # k3s cluster name / context prefix
   kubernetesVersion: "v1.32.0-k3s1" # rancher/k3s image tag
   k3sToken: "QonductorS3cretT0ken"  # shared secret for agent join
-  flannelInterface: "ens33"         # physical NIC for Flannel VXLAN
+  flannelInterface: "auto"           # auto-detect per-node physical NIC
 
 # --- Server node (control-plane + etcd + optional worker) -------------------
 server:
@@ -39,7 +39,7 @@ server:
   containerName: k3s-server         # Docker container name
   nodeName: control-plane-1         # Kubernetes node name
   nodeType: classical               # Qonductor node role label
-  cpus: 2                           # CPU cores to allocate (optional)
+  cpus: 4                           # CPU cores to allocate (optional)
   memory: 4g                        # RAM to allocate (optional)
   qpus: []                          # QPU profiles (server is classical)
 
@@ -50,7 +50,7 @@ agents:
     containerName: k3s-agent-1      # Docker container name
     nodeName: quantum-worker-1      # Kubernetes node name
     nodeType: quantum               # Qonductor node role label
-    memory: 8g                      # RAM to allocate
+    memory: 4g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
     qpus:                           # QPU profiles from ../qpus/
       - qpu0_27q.json
@@ -60,6 +60,6 @@ agents:
     containerName: k3s-agent-2      # Docker container name
     nodeName: classical-worker-2    # Kubernetes node name
     nodeType: classical             # Qonductor node role label
-    memory: 8g                      # RAM to allocate
+    memory: 4g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
     qpus: []

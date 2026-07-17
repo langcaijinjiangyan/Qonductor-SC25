@@ -41,6 +41,8 @@ def build_qaoa_workflow_inputs(
     shots: int = 1024,
     max_iterations: int = 200,
     priority: str = "balanced",
+    quantum_timeout_seconds: float = 21600.0,
+    poll_seconds: float = 5.0,
 ) -> dict[str, Any]:
     workload_dir = Path(workload_dir)
     spec_path = workload_dir / "spec_12.json"
@@ -68,6 +70,8 @@ def build_qaoa_workflow_inputs(
             "clbits": params.get("num_clbits", params.get("num_qubits", 12)),
             "shots": shots,
             "maxIterations": max_iterations,
+            "quantumTimeoutSeconds": quantum_timeout_seconds,
+            "pollSeconds": poll_seconds,
             "priority": priority,
             "edges": edges,
             "source": {
@@ -96,7 +100,7 @@ def build_qaoa_workflow_image(
         step_type=StepType.CLASSICAL,
         label="qaoa_spsa_driver",
         code=DRIVER_CODE,
-        resource_requirements={"cpu": 1, "memory": "2Gi"},
+        resource_requirements={"cpu": 1, "memory": "1Gi"},
         metadata={"dynamic_quantum_jobs": True},
     )
     dag.add_node(node)
@@ -109,7 +113,7 @@ def build_qaoa_workflow_image(
                     "name": "qaoa-spsa-driver",
                     "image": driver_image,
                     "resources": {
-                        "limits": {"cpu": "1", "memory": "2Gi"},
+                        "limits": {"cpu": "1", "memory": "1Gi"},
                     },
                 }
             ],
@@ -158,6 +162,7 @@ def build_hybrid_workflow_manifest(
     *,
     name: str = "qaoa-12-dynamic",
     priority: str = "balanced",
+    max_retries: int = 100,
 ) -> dict[str, Any]:
     containers = image.config.get("spec", {}).get("containers", [])
     return {
@@ -171,7 +176,7 @@ def build_hybrid_workflow_manifest(
         "spec": {
             "workflowImageRef": image.image_id,
             "priority": priority,
-            "maxRetries": 3,
+            "maxRetries": max_retries,
             "containers": containers,
             "scheduling": {
                 "classicalPolicy": "FilterScore",

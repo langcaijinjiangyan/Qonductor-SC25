@@ -48,11 +48,13 @@ step()  { echo -e "${CYAN}[STEP]${NC}  $*"; }
 # Defaults
 # ---------------------------------------------------------------------------
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-WORKLOAD_DIR="${PROJECT_ROOT}/workload_python"
+WORKLOAD_DIR="${PROJECT_ROOT}/workflow"
 OUTPUT_DIR="${PROJECT_ROOT}/data/batch_results"
 SHOTS=1024
 MAX_ITERATIONS=20
 PRIORITY="balanced"
+QUANTUM_TIMEOUT_SECONDS=21600
+POLL_SECONDS=5
 SEED=""
 DURATION=""
 TASK_COUNT=""
@@ -88,6 +90,9 @@ Optional:
   --shots N              Base shot count per task, randomised ±50% (default: 1024)
   --max-iterations N     Upper bound for randomised SPSA iterations (default: 20)
   --priority PRIORITY    Scheduling priority: balanced|fidelity|jct (default: balanced)
+  --quantum-timeout SECONDS
+                          Max wait per QuantumJob inside each driver (default: 21600)
+  --poll-seconds SECONDS  Poll interval for QuantumJob status checks (default: 5)
   --seed N               Random seed for reproducible task selection
   --timeout SECONDS      Max wait time for all workflows to finish (default: 3600)
   -h, --help             Show this help message
@@ -110,6 +115,10 @@ while [[ $# -gt 0 ]]; do
             MAX_ITERATIONS="$2"; shift 2 ;;
         --priority)
             PRIORITY="$2"; shift 2 ;;
+        --quantum-timeout)
+            QUANTUM_TIMEOUT_SECONDS="$2"; shift 2 ;;
+        --poll-seconds)
+            POLL_SECONDS="$2"; shift 2 ;;
         --seed)
             SEED="$2"; shift 2 ;;
         --timeout)
@@ -202,6 +211,8 @@ if ! "${PYTHON_CMD}" "${GENERATOR}" \
     --shots "${SHOTS}" \
     --max-iterations "${MAX_ITERATIONS}" \
     --priority "${PRIORITY}" \
+    --quantum-timeout-seconds "${QUANTUM_TIMEOUT_SECONDS}" \
+    --poll-seconds "${POLL_SECONDS}" \
     "${SEED_ARG[@]}" 2>&1 | tee "${BATCH_OUT_DIR}/generation.log"; then
     error "Manifest generation failed — see ${BATCH_OUT_DIR}/generation.log"
     exit 1
@@ -461,12 +472,25 @@ else
         -o json > "${METRICS_DIR}/quantum_job_metrics_raw.json" 2>/dev/null || true
 fi
 
-# --- 5c. Clean up port-forward ---
+# --- 5c. Always keep raw CR snapshots for post-run analysis ---
+info "Exporting raw CR snapshots ..."
+"${KUBECTL}" get hybridworkflows \
+    -l "batch_id=${BATCH_ID}" \
+    -o json > "${METRICS_DIR}/workflow_crs_raw.json" 2>/dev/null || true
+"${KUBECTL}" get quantumjobs \
+    -o json > "${METRICS_DIR}/quantum_job_crs_raw.json" 2>/dev/null || true
+info "  Raw HybridWorkflow CRs → ${METRICS_DIR}/workflow_crs_raw.json"
+info "  Raw QuantumJob CRs → ${METRICS_DIR}/quantum_job_crs_raw.json"
+
+# --- 5d. Clean up port-forward ---
 if [[ -n "${PF_PID:-}" ]]; then
-    kill "${PF_PID}" 2>/dev/null || true
+    if kill -0 "${PF_PID}" 2>/dev/null; then
+        kill "${PF_PID}" 2>/dev/null || true
+    fi
+    wait "${PF_PID}" 2>/dev/null || true
 fi
 
-# --- 5d. Generate a human-readable summary ---
+# --- 5e. Generate a human-readable summary ---
 SUMMARY_FILE="${BATCH_OUT_DIR}/summary.txt"
 {
     echo "=============================================================================="

@@ -50,11 +50,11 @@ spec:
               value: "False"
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "__OPERATOR_CPU_REQUEST__"
+              memory: "__OPERATOR_MEMORY_REQUEST__"
             limits:
-              cpu: "1"
-              memory: "1Gi"
+              cpu: "__OPERATOR_CPU_LIMIT__"
+              memory: "__OPERATOR_MEMORY_LIMIT__"
           volumeMounts:
             - name: config
               mountPath: /etc/qonductor

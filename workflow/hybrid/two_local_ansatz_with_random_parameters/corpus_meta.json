@@ -1,0 +1,27 @@
+{
+  "workload_type": "hybrid",
+  "benchmark_name": "two_local_ansatz_with_random_parameters",
+  "entries": [
+    {
+      "workload_type": "hybrid",
+      "benchmark_name": "two_local_ansatz_with_random_parameters",
+      "category": "two_local_ansatz_with_random_parameters",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/hybrid/two_local_ansatz_with_random_parameters",
+      "qworkdir_rel": "hybrid/two_local_ansatz_with_random_parameters",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/hybrid/two_local_ansatz_with_random_parameters/spec_12.json",
+      "qspec_rel": "hybrid/two_local_ansatz_with_random_parameters/spec_12.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/hybrid/two_local_ansatz_with_random_parameters/two_local_ansatz_with_random_parameters_12_hybrid",
+      "binary_rel": "hybrid/two_local_ansatz_with_random_parameters/two_local_ansatz_with_random_parameters_12_hybrid",
+      "binary_exists": true,
+      "binary_source": "submit_script",
+      "requested_qubits": 12,
+      "hybrid_job": true,
+      "size_bucket": "medium",
+      "spec_version": 2,
+      "circuit_files": [
+        "twolocalrandom_indep_qiskit_12.qasm3"
+      ],
+      "parameter_file": "parameters_12.json"
+    }
+  ]
+}

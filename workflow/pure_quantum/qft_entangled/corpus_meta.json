@@ -1,0 +1,90 @@
+{
+  "workload_type": "pure",
+  "benchmark_name": "qft_entangled",
+  "entries": [
+    {
+      "workload_type": "pure",
+      "benchmark_name": "qft_entangled",
+      "category": "qft_entangled",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled",
+      "qworkdir_rel": "pure_quantum/qft_entangled",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/spec_12.json",
+      "qspec_rel": "pure_quantum/qft_entangled/spec_12.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/qft_entangled_12_pure",
+      "binary_rel": "pure_quantum/qft_entangled/qft_entangled_12_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 12,
+      "hybrid_job": false,
+      "size_bucket": "medium",
+      "spec_version": 2,
+      "circuit_files": [
+        "qftentangled_indep_qiskit_12.qasm"
+      ],
+      "parameter_file": null
+    },
+    {
+      "workload_type": "pure",
+      "benchmark_name": "qft_entangled",
+      "category": "qft_entangled",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled",
+      "qworkdir_rel": "pure_quantum/qft_entangled",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/spec_2.json",
+      "qspec_rel": "pure_quantum/qft_entangled/spec_2.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/qft_entangled_2_pure",
+      "binary_rel": "pure_quantum/qft_entangled/qft_entangled_2_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 2,
+      "hybrid_job": false,
+      "size_bucket": "small",
+      "spec_version": 2,
+      "circuit_files": [
+        "qftentangled_indep_qiskit_2.qasm"
+      ],
+      "parameter_file": null
+    },
+    {
+      "workload_type": "pure",
+      "benchmark_name": "qft_entangled",
+      "category": "qft_entangled",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled",
+      "qworkdir_rel": "pure_quantum/qft_entangled",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/spec_4.json",
+      "qspec_rel": "pure_quantum/qft_entangled/spec_4.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/qft_entangled_4_pure",
+      "binary_rel": "pure_quantum/qft_entangled/qft_entangled_4_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 4,
+      "hybrid_job": false,
+      "size_bucket": "small",
+      "spec_version": 2,
+      "circuit_files": [
+        "qftentangled_indep_qiskit_4.qasm"
+      ],
+      "parameter_file": null
+    },
+    {
+      "workload_type": "pure",
+      "benchmark_name": "qft_entangled",
+      "category": "qft_entangled",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled",
+      "qworkdir_rel": "pure_quantum/qft_entangled",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/spec_8.json",
+      "qspec_rel": "pure_quantum/qft_entangled/spec_8.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/qft_entangled/qft_entangled_8_pure",
+      "binary_rel": "pure_quantum/qft_entangled/qft_entangled_8_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 8,
+      "hybrid_job": false,
+      "size_bucket": "medium",
+      "spec_version": 2,
+      "circuit_files": [
+        "qftentangled_indep_qiskit_8.qasm"
+      ],
+      "parameter_file": null
+    }
+  ]
+}

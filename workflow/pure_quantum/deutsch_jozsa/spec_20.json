@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "qnode": "20",
+  "circuits": {
+    "dj_indep_qiskit_20": "dj_indep_qiskit_20.qasm"
+  },
+  "hybrid_job": false
+}

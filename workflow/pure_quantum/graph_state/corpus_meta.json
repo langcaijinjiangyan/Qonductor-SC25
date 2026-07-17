@@ -1,0 +1,90 @@
+{
+  "workload_type": "pure",
+  "benchmark_name": "graph_state",
+  "entries": [
+    {
+      "workload_type": "pure",
+      "benchmark_name": "graph_state",
+      "category": "graph_state",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state",
+      "qworkdir_rel": "pure_quantum/graph_state",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/spec_12.json",
+      "qspec_rel": "pure_quantum/graph_state/spec_12.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/graph_state_12_pure",
+      "binary_rel": "pure_quantum/graph_state/graph_state_12_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 12,
+      "hybrid_job": false,
+      "size_bucket": "medium",
+      "spec_version": 2,
+      "circuit_files": [
+        "graphstate_indep_qiskit_12.qasm"
+      ],
+      "parameter_file": null
+    },
+    {
+      "workload_type": "pure",
+      "benchmark_name": "graph_state",
+      "category": "graph_state",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state",
+      "qworkdir_rel": "pure_quantum/graph_state",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/spec_16.json",
+      "qspec_rel": "pure_quantum/graph_state/spec_16.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/graph_state_16_pure",
+      "binary_rel": "pure_quantum/graph_state/graph_state_16_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 16,
+      "hybrid_job": false,
+      "size_bucket": "large",
+      "spec_version": 2,
+      "circuit_files": [
+        "graphstate_indep_qiskit_16.qasm"
+      ],
+      "parameter_file": null
+    },
+    {
+      "workload_type": "pure",
+      "benchmark_name": "graph_state",
+      "category": "graph_state",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state",
+      "qworkdir_rel": "pure_quantum/graph_state",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/spec_4.json",
+      "qspec_rel": "pure_quantum/graph_state/spec_4.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/graph_state_4_pure",
+      "binary_rel": "pure_quantum/graph_state/graph_state_4_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 4,
+      "hybrid_job": false,
+      "size_bucket": "small",
+      "spec_version": 2,
+      "circuit_files": [
+        "graphstate_indep_qiskit_4.qasm"
+      ],
+      "parameter_file": null
+    },
+    {
+      "workload_type": "pure",
+      "benchmark_name": "graph_state",
+      "category": "graph_state",
+      "qworkdir_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state",
+      "qworkdir_rel": "pure_quantum/graph_state",
+      "qspec_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/spec_8.json",
+      "qspec_rel": "pure_quantum/graph_state/spec_8.json",
+      "binary_repo": "experiments/common_workloads/corpus/mqtbench2_20/pure_quantum/graph_state/graph_state_8_pure",
+      "binary_rel": "pure_quantum/graph_state/graph_state_8_pure",
+      "binary_exists": false,
+      "binary_source": "submit_script",
+      "requested_qubits": 8,
+      "hybrid_job": false,
+      "size_bucket": "medium",
+      "spec_version": 2,
+      "circuit_files": [
+        "graphstate_indep_qiskit_8.qasm"
+      ],
+      "parameter_file": null
+    }
+  ]
+}

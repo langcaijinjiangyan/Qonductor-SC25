@@ -1,0 +1,12 @@
+unpacking docker.io/rancher/k3s:v1.32.0-k3s1 (sha256:b7a31cc883051a89334a7865a7e75ef0bfcec5a5d13aba228b37388160a0be75)...done
+unpacking docker.io/rancher/mirrored-pause:3.6 (sha256:74c4244427b7312c5b901fe0f67cbc53683d06f4f24c6faee65d4182bf0fa893)...done
+unpacking docker.io/rancher/mirrored-coredns-coredns:1.12.0 (sha256:82979ddf442c593027a57239ad90616deb874e90c365d1a96ad508c2104bdea5)...done
+unpacking docker.io/rancher/mirrored-library-traefik:2.11.10 (sha256:b19934b3f8e03e213e258e69d57376fd0c4441ea04a518313cab2835fe9b92b3)...done
+unpacking docker.io/rancher/local-path-provisioner:v0.0.30 (sha256:9b914881170048f80ae9302f36e5b99b4a6b18af73a38adc1c66d12f65d360be)...done
+unpacking docker.io/rancher/mirrored-metrics-server:v0.7.2 (sha256:dccf8474fb910fef261d31d9483d7e4c1df7b86cf4d638fb6a7d7c88bd51600a)...done
+unpacking docker.io/rancher/klipper-helm:v0.9.3-build20241008 (sha256:73ff7ef399717ba8339559054557bd427bdafb47db112165a8c0c358d1ca0283)...done
+unpacking docker.io/rancher/klipper-lb:v0.4.9 (sha256:dd380f5d89a52f2a07853ff17a6048f805c1f8113b50578f3efc3efb9bcf670a)...done
+unpacking docker.io/library/qonductor-operator:latest (sha256:2b59255a724c99e7e2d1d4c9a263438275036688905c6a317eb6cc74c9f890d9)...done
+unpacking docker.io/library/qonductor-device-plugin:latest (sha256:1b045f0fad09099089b2534649ca8a95e7857247a8c4d5c0c6a720ffac3cf225)...done
+unpacking docker.io/library/qonductor-quantum-executor:latest (sha256:5ba15c1a12f9c80fcaed77815948d9a357f0ad798b130b8fd9b82e8dd4e17d06)...done
+[SUMMARY] 2026-07-17T22:24:47+08:00 192.168.36.130:k3s-agent-2 — all 11 images imported and verified

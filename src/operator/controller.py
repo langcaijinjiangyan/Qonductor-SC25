@@ -146,12 +146,20 @@ class HybridWorkflowController:
 
     def _handle_create(self, cr: dict) -> str:
         """Handle a newly-created HybridWorkflow CR."""
+        cr_name = cr["metadata"]["name"]
+        if cr_name in self._active:
+            logger.debug(
+                "HybridWorkflow %s already active; skipping duplicate event",
+                cr_name,
+            )
+            return self._active[cr_name]["run_id"]
+
         spec = cr.get("spec", {})
         image_id = spec.get("workflowImageRef", "")
         inputs = spec.get("workflowInputs", {})
         run_id = uuid.uuid4().hex[:16]
 
-        self._active[cr["metadata"]["name"]] = {
+        self._active[cr_name] = {
             "run_id": run_id,
             "image_id": image_id,
             "cr": cr,

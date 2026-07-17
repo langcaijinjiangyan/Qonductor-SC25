@@ -129,6 +129,107 @@ _run() {
     _remote "$host" "$@"
 }
 
+_remote_user_id() {
+    local host="$1"
+    _remote "$host" "id -u"
+}
+
+_remote_group_id() {
+    local host="$1"
+    _remote "$host" "id -g"
+}
+
+_qpu_instance_name() {
+    local node_name="$1"
+    local qpu_index="$2"
+    local qpu_file="$3"
+    python3 - "$node_name" "$qpu_index" "${QPUS_DIR}/${qpu_file}" <<'PY'
+import hashlib
+import json
+import re
+import sys
+
+node_name, qpu_index, qpu_path = sys.argv[1:4]
+with open(qpu_path, encoding="utf-8") as fh:
+    base_name = str(json.load(fh)["name"])
+
+raw = f"{base_name}-{node_name}-{qpu_index}"
+safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("._-").lower()
+if not safe:
+    safe = "qpu"
+
+# Kubernetes label names are limited to 63 characters.  The deploy script uses
+# this value in label key names like qonductor.io/backend-<qpu_name>, so keep
+# the generated instance ID short enough for that suffix too.
+if len(safe) > 55:
+    digest = hashlib.sha1(safe.encode("utf-8")).hexdigest()[:8]
+    safe = f"{safe[:46].rstrip('._-')}-{digest}"
+
+print(safe)
+PY
+}
+
+_render_qpu_instance_profile() {
+    local node_name="$1"
+    local qpu_index="$2"
+    local qpu_file="$3"
+    local output_path="$4"
+    python3 - "$node_name" "$qpu_index" "${QPUS_DIR}/${qpu_file}" "$output_path" <<'PY'
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+node_name, qpu_index, qpu_path, output_path = sys.argv[1:5]
+with open(qpu_path, encoding="utf-8") as fh:
+    data = json.load(fh)
+
+base_name = str(data["name"])
+raw = f"{base_name}-{node_name}-{qpu_index}"
+instance_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("._-").lower()
+if not instance_name:
+    instance_name = "qpu"
+if len(instance_name) > 55:
+    digest = hashlib.sha1(instance_name.encode("utf-8")).hexdigest()[:8]
+    instance_name = f"{instance_name[:46].rstrip('._-')}-{digest}"
+
+data["name"] = instance_name
+data["qonductor_base_name"] = base_name
+data["qonductor_profile_source"] = Path(qpu_path).name
+data["qonductor_node_name"] = node_name
+data["qonductor_instance_index"] = int(qpu_index)
+
+with open(output_path, "w", encoding="utf-8") as fh:
+    json.dump(data, fh, indent=2, sort_keys=True)
+    fh.write("\n")
+PY
+}
+
+_clear_qpu_node_labels() {
+    local node_name="$1"
+    local labels_to_remove
+    labels_to_remove="$(
+        kubectl get node "$node_name" -o json 2>/dev/null | python3 -c '
+import json
+import sys
+
+try:
+    node = json.load(sys.stdin)
+except json.JSONDecodeError:
+    raise SystemExit(0)
+
+labels = (node.get("metadata", {}) or {}).get("labels", {}) or {}
+for key in sorted(labels):
+    if key.startswith("qonductor.io/backend-") or key.startswith("qonductor.io/qpu-"):
+        print(f"{key}-")
+'
+    )"
+    [[ -n "$labels_to_remove" ]] || return 0
+    # shellcheck disable=SC2086
+    kubectl label node "$node_name" $labels_to_remove --overwrite 2>/dev/null || true
+}
+
 # ==============================================================================
 # Helpers: collect hosts / containers from parsed config
 # ==============================================================================
@@ -783,6 +884,10 @@ import_containerd() {
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
 
+    # Per-host log directory for containerd import errors.
+    local import_log_dir="${PROJECT_ROOT}/data/deploy_logs/containerd_import"
+    mkdir -p "$import_log_dir"
+
     local -a import_pids=()
     local -a import_labels=()
     local failures=0
@@ -803,15 +908,53 @@ import_containerd() {
         _require_docker_images "$host" "${images[@]}" || \
             die "Cannot import into ${container}: required image(s) missing from Docker on ${host}."
 
-        # Save images on the target host and pipe into that host's k3s
-        # containerd. This keeps SKIP_IMAGE_DISTRIBUTE useful when images were
-        # pre-loaded directly on remote hosts.
-        # Multi-image tar is supported by `ctr images import`.
+        local host_log="${import_log_dir}/${host}_${container}.log"
+        # Truncate log for a fresh run.
+        if _is_local "$host"; then
+            : >"$host_log" 2>/dev/null || true
+        else
+            _remote "$host" "mkdir -p '$(dirname "$host_log")'" 2>/dev/null || true
+            : >"$host_log" 2>/dev/null || true
+        fi
+
         if [[ "$DRY_RUN" == "1" ]]; then
-            echo "  [dry-run] ${host}: docker save ${images[*]} | docker exec -i ${container} ctr images import -"
+            echo "  [dry-run] ${host}: import ${#images[@]} images one-by-one into ${container}"
         else
             (
-                _remote "$host" "docker save ${images[*]} 2>/dev/null | docker exec -i '${container}' ctr images import - 2>/dev/null"
+                local import_ok=0
+                local import_fail=0
+                for img in "${images[@]}"; do
+                    # Import each image individually so a failure on one does not
+                    # break the rest.  Capture stderr into the per-host log.
+                    if _remote "$host" \
+                        "docker save '${img}' 2>&1 | docker exec -i '${container}' ctr images import - 2>&1" \
+                        >>"$host_log" 2>&1; then
+                        import_ok=$((import_ok + 1))
+                    else
+                        import_fail=$((import_fail + 1))
+                        echo "[FAIL] $(date -Iseconds) ${host}:${container} — ${img}" >>"$host_log"
+                    fi
+                done
+
+                # Post-import verification: check each image exists in containerd.
+                local verify_missing=0
+                local ctr_img_list
+                ctr_img_list="$(_remote "$host" "docker exec '${container}' ctr images ls -q 2>&1" 2>>"$host_log" || true)"
+                for img in "${images[@]}"; do
+                    # Match without the tag for flexible comparison (ctr list outputs
+                    # full references like docker.io/library/<name>:<tag>).
+                    if ! echo "$ctr_img_list" | grep -qF "${img}"; then
+                        verify_missing=$((verify_missing + 1))
+                        echo "[MISSING] $(date -Iseconds) ${host}:${container} — ${img} not found after import" >>"$host_log"
+                    fi
+                done
+
+                if [[ "$import_fail" -gt 0 || "$verify_missing" -gt 0 ]]; then
+                    echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — ok=${import_ok} fail=${import_fail} missing=${verify_missing}" >>"$host_log"
+                    exit 1
+                fi
+                echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — all ${import_ok} images imported and verified" >>"$host_log"
+                exit 0
             ) &
             import_pids+=("$!")
             import_labels+=("${host}:${container}")
@@ -824,13 +967,13 @@ import_containerd() {
         if wait "$pid"; then
             log "  ✓ ${label} done"
         else
-            warn "  ${label} import failed"
+            warn "  ${label} import failed — see ${import_log_dir}/${label}.log"
             failures=$((failures + 1))
         fi
     done
 
     [[ "$failures" -eq 0 ]] || die "${failures} containerd import task(s) failed"
-    log "  ✓ Containerd import complete"
+    log "  ✓ Containerd import complete (logs: ${import_log_dir})"
 }
 
 # ==============================================================================
@@ -840,9 +983,17 @@ import_containerd() {
 sync_qpu_profiles() {
     log "Syncing QPU profiles to remote hosts …"
 
+    local -a hosts
+    mapfile -t hosts < <(_all_hosts | sort -u)
+    for host in "${hosts[@]}"; do
+        _run "$host" "sudo mkdir -p /etc/qonductor/qpus && sudo rm -f /etc/qonductor/qpus/*.json"
+    done
+
     for ((i = 0; i < AGENTS_COUNT; i++)); do
         local host_var="AGENTS_${i}_HOST"
         local host="${!host_var}"
+        local node_var="AGENTS_${i}_NODENAME"
+        local node_name="${!node_var}"
         local qpu_count_var="AGENTS_${i}_QPUS_COUNT"
         local qpus=()
         # bash 4.4: indirect expansion (${!ref}) of an empty array triggers
@@ -854,16 +1005,22 @@ sync_qpu_profiles() {
         local qpu_count=${#qpus[@]}
 
         if [[ "$qpu_count" -gt 0 ]]; then
-            _run "$host" "sudo mkdir -p /etc/qonductor/qpus"
+            for ((j = 0; j < qpu_count; j++)); do
+                local qpu_file="${qpus[$j]}"
+                local qpu_name
+                qpu_name="$(_qpu_instance_name "$node_name" "$j" "$qpu_file")"
+                local rendered_profile
+                rendered_profile="$(mktemp "/tmp/qonductor-qpu-${qpu_name}.XXXXXX.json")"
+                _render_qpu_instance_profile "$node_name" "$j" "$qpu_file" "$rendered_profile"
 
-            for qpu_file in "${qpus[@]}"; do
                 if _is_local "$host"; then
-                    sudo cp "${QPUS_DIR}/${qpu_file}" "/etc/qonductor/qpus/${qpu_file}"
+                    sudo cp "$rendered_profile" "/etc/qonductor/qpus/${qpu_name}.json"
                 else
-                    scp -q "${QPUS_DIR}/${qpu_file}" "${host}:/tmp/${qpu_file}"
-                    _remote "$host" "sudo mv /tmp/${qpu_file} /etc/qonductor/qpus/${qpu_file}"
+                    scp -q "$rendered_profile" "${host}:/tmp/${qpu_name}.json"
+                    _remote "$host" "sudo mv /tmp/${qpu_name}.json /etc/qonductor/qpus/${qpu_name}.json"
                 fi
-                log "  ✓ ${qpu_file} → ${host}:/etc/qonductor/qpus/"
+                rm -f "$rendered_profile"
+                log "  ✓ ${qpu_file} as ${qpu_name}.json → ${host}:/etc/qonductor/qpus/"
             done
         fi
     done
@@ -885,6 +1042,7 @@ label_nodes() {
         local node_type="${!type_var}"
 
         kubectl label node "$node_name" "qonductor.io/node-type=${node_type}" --overwrite 2>/dev/null || true
+        _clear_qpu_node_labels "$node_name"
 
         local qpu_count_var="AGENTS_${i}_QPUS_COUNT"
         local qpus=()
@@ -899,7 +1057,7 @@ label_nodes() {
         for ((j = 0; j < qpu_count_for_agent; j++)); do
             local qpu_file="${qpus[$j]}"
             local qpu_name
-            qpu_name="$(python3 -c "import json; print(json.load(open('${QPUS_DIR}/${qpu_file}'))['name'])")"
+            qpu_name="$(_qpu_instance_name "$node_name" "$j" "$qpu_file")"
 
             kubectl label node "$node_name" "qonductor.io/backend-${qpu_name}=true" --overwrite 2>/dev/null || true
             kubectl label node "$node_name" "qonductor.io/qpu-${j}=${qpu_name}" --overwrite 2>/dev/null || true
@@ -920,6 +1078,25 @@ deploy_qonductor_crds() {
     log "  ✓ CRDs applied"
 }
 
+prepare_workflow_registry() {
+    log "Preparing workflow registry directory …"
+
+    local host="${SERVER_HOST}"
+    local uid gid
+    uid="$(_remote_user_id "$host")"
+    gid="$(_remote_group_id "$host")"
+
+    # The operator sees this path through a k3s-in-Docker hostPath mount. If
+    # the directory is first created from inside that container stack, ownership
+    # can appear as nobody:nogroup on the deploy host. Keep it host-created and
+    # writable by the user who generates workflow registry entries locally.
+    _run "$host" "mkdir -p '${PROJECT_ROOT}/data/workflow_registry'"
+    _run "$host" "sudo chown -R '${uid}:${gid}' '${PROJECT_ROOT}/data/workflow_registry'"
+    _run "$host" "chmod u+rwx '${PROJECT_ROOT}/data' '${PROJECT_ROOT}/data/workflow_registry'"
+
+    log "  ✓ ${PROJECT_ROOT}/data/workflow_registry owner=${uid}:${gid}"
+}
+
 deploy_qonductor_controllers() {
     if [[ "$SKIP_CONTROLLERS" == "1" ]]; then
         warn "SKIP_CONTROLLERS=1 — skipping operator/device-plugin deployment."
@@ -927,10 +1104,95 @@ deploy_qonductor_controllers() {
     fi
 
     log "Deploying Qonductor operator and device plugin …"
+    kubectl delete configmap -n default \
+        -l app=qonductor,component=qpu-profile \
+        --ignore-not-found=true 2>/dev/null || true
+
+    # Compute operator resources from the k3s server container config:
+    # requests = half of server resources; limits = all server resources.
+    local server_cpus="${SERVER_CPUS:-2}"
+    local server_memory="${SERVER_MEMORY:-4g}"
+    local resource_assignments
+    resource_assignments="$(
+        python3 - "$server_cpus" "$server_memory" <<'PY'
+from decimal import Decimal, InvalidOperation
+import re
+import sys
+
+
+def parse_cpu(value: str) -> Decimal:
+    raw = str(value).strip()
+    if raw.endswith("m"):
+        return Decimal(raw[:-1]) / Decimal(1000)
+    return Decimal(raw)
+
+
+def render_cpu(value: Decimal) -> str:
+    if value == value.to_integral_value():
+        return str(int(value))
+    milli = (value * Decimal(1000)).to_integral_value()
+    return f"{int(milli)}m"
+
+
+def split_memory(value: str) -> tuple[Decimal, str]:
+    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]*)\s*", str(value))
+    if not match:
+        raise ValueError(f"unsupported memory quantity: {value!r}")
+    number = Decimal(match.group(1))
+    unit = match.group(2) or "g"
+    return number, unit
+
+
+def k8s_memory_unit(unit: str) -> str:
+    normalized = unit.strip()
+    lower = normalized.lower()
+    if lower in ("g", "gb", "gi", "gib"):
+        return "Gi"
+    if lower in ("m", "mb", "mi", "mib"):
+        return "Mi"
+    if lower in ("k", "kb", "ki", "kib"):
+        return "Ki"
+    return normalized or "Gi"
+
+
+def render_memory(number: Decimal, unit: str) -> str:
+    unit = k8s_memory_unit(unit)
+    if number == number.to_integral_value():
+        return f"{int(number)}{unit}"
+
+    # Kubernetes accepts fixed-point quantities, but emitting Mi for fractional
+    # Gi keeps the generated manifest easy to read and avoids parser surprises.
+    if unit == "Gi":
+        mib = (number * Decimal(1024)).to_integral_value()
+        return f"{int(mib)}Mi"
+    if unit == "Mi":
+        kib = (number * Decimal(1024)).to_integral_value()
+        return f"{int(kib)}Ki"
+    return f"{number.normalize()}{unit}"
+
+
+try:
+    cpu = parse_cpu(sys.argv[1])
+    mem_num, mem_unit = split_memory(sys.argv[2])
+except (InvalidOperation, ValueError) as exc:
+    raise SystemExit(str(exc))
+
+print(f"op_cpu_req={render_cpu(cpu / Decimal(2))}")
+print(f"op_mem_req={render_memory(mem_num / Decimal(2), mem_unit)}")
+print(f"op_cpu_limit={render_cpu(cpu)}")
+print(f"op_mem_limit={render_memory(mem_num, mem_unit)}")
+PY
+    )" || die "Failed to compute operator resources from server.cpus=${server_cpus}, server.memory=${server_memory}"
+    eval "$resource_assignments"
+    log "  Operator resources: requests=${op_cpu_req} CPU/${op_mem_req}, limits=${op_cpu_limit} CPU/${op_mem_limit}"
 
     local rendered_operator
     rendered_operator="$(mktemp /tmp/qonductor-operator-deployment.XXXXXX.yaml)"
-    sed "s|__QONDUCTOR_DATA_PATH__|${PROJECT_ROOT}/data|g" \
+    sed -e "s|__QONDUCTOR_DATA_PATH__|${PROJECT_ROOT}/data|g" \
+        -e "s|__OPERATOR_CPU_REQUEST__|${op_cpu_req}|g" \
+        -e "s|__OPERATOR_MEMORY_REQUEST__|${op_mem_req}|g" \
+        -e "s|__OPERATOR_CPU_LIMIT__|${op_cpu_limit}|g" \
+        -e "s|__OPERATOR_MEMORY_LIMIT__|${op_mem_limit}|g" \
         "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"
 
     kubectl apply -f "${DEPLOY_DIR}/operator/rbac.yaml"
@@ -1043,6 +1305,7 @@ main() {
     sync_qpu_profiles
     label_nodes
     deploy_qonductor_crds
+    prepare_workflow_registry
     deploy_qonductor_controllers
 
     # ---- Phase 7: Summary --------------------------------------------------

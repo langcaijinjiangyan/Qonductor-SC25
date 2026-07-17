@@ -34,7 +34,7 @@ spec:
       nodeSelector:
         qonductor.io/node-type: "quantum"
       serviceAccountName: qonductor-operator
-      hostNetwork: true
+      hostNetwork: false
       containers:
         - name: device-plugin
           image: qonductor-device-plugin:latest

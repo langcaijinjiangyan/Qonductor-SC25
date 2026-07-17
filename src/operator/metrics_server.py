@@ -89,6 +89,7 @@ def _extract_quantum_job_metrics(qj: dict) -> dict[str, Any]:
         "actual_fidelity": (
             float(actual_fid) if actual_fid is not None else None
         ),
+        "scheduling_metadata": status.get("schedulingMetadata"),
     }
 
 
