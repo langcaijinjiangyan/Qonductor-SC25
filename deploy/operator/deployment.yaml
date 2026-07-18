@@ -46,6 +46,8 @@ spec:
               value: "."
             - name: QONDUCTOR_REGISTRY_ROOT
               value: "/data/workflow_registry"
+            - name: QONDUCTOR_LOG_LEVEL
+              value: "INFO"
             - name: QISKIT_PARALLEL
               value: "False"
           resources:

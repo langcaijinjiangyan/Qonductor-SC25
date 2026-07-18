@@ -576,9 +576,12 @@ def main() -> None:
     """Run the HybridWorkflow and QuantumScheduler controllers together."""
     import os
 
+    from src.utils.logging_config import configure_logging
     from src.operator.quantum_scheduler_controller import QuantumSchedulerController
     from src.operator.qpu_queue_controller import QPUQueueController
     from src.operator.metrics_server import start_metrics_server
+
+    configure_logging()
 
     mode = os.environ.get("QONDUCTOR_MODE", "local")
     registry_root = os.environ.get("QONDUCTOR_REGISTRY_ROOT", "data/workflow_registry")

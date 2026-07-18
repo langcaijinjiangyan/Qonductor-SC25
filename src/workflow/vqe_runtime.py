@@ -15,6 +15,7 @@ import random
 from typing import Any
 
 from src.operator.k8s_client import K8sClient
+from src.utils.logging_config import configure_logging
 from src.workflow.qaoa_runtime import (
     initialize_parameters,
     submit_quantum_eval,
@@ -95,6 +96,8 @@ def run_vqe_spsa_driver(
     config: dict[str, Any] | None = None,
     client: K8sClient | None = None,
 ) -> dict[str, Any]:
+    configure_logging()
+
     cfg = _load_runtime_config(config)
     mode = os.environ.get("QONDUCTOR_MODE", "k8s")
     namespace = os.environ.get("QONDUCTOR_NAMESPACE", "default")

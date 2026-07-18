@@ -30,6 +30,7 @@ COPY qpus/  /etc/qonductor/qpus/
 
 ENV PYTHONPATH=/app
 ENV QONDUCTOR_MODE=k8s
+ENV QONDUCTOR_LOG_LEVEL=INFO
 ENV QPU_PROFILES_DIR=/etc/qonductor/qpus
 
 # Entry point: register QPUs and start calibration refresh loop.

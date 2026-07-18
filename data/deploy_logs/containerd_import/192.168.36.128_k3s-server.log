@@ -6,7 +6,7 @@ unpacking docker.io/rancher/local-path-provisioner:v0.0.30 (sha256:9b91488117004
 unpacking docker.io/rancher/mirrored-metrics-server:v0.7.2 (sha256:dccf8474fb910fef261d31d9483d7e4c1df7b86cf4d638fb6a7d7c88bd51600a)...done
 unpacking docker.io/rancher/klipper-helm:v0.9.3-build20241008 (sha256:73ff7ef399717ba8339559054557bd427bdafb47db112165a8c0c358d1ca0283)...done
 unpacking docker.io/rancher/klipper-lb:v0.4.9 (sha256:dd380f5d89a52f2a07853ff17a6048f805c1f8113b50578f3efc3efb9bcf670a)...done
-unpacking docker.io/library/qonductor-operator:latest (sha256:2b59255a724c99e7e2d1d4c9a263438275036688905c6a317eb6cc74c9f890d9)...done
-unpacking docker.io/library/qonductor-device-plugin:latest (sha256:1b045f0fad09099089b2534649ca8a95e7857247a8c4d5c0c6a720ffac3cf225)...done
-unpacking docker.io/library/qonductor-quantum-executor:latest (sha256:5ba15c1a12f9c80fcaed77815948d9a357f0ad798b130b8fd9b82e8dd4e17d06)...done
-[SUMMARY] 2026-07-17T22:24:27+08:00 192.168.36.128:k3s-server — all 11 images imported and verified
+unpacking docker.io/library/qonductor-operator:latest (sha256:911309941aa6a22dad76c8deec995507d13e34db1aedd4dddc2de21481fbee78)...done
+unpacking docker.io/library/qonductor-device-plugin:latest (sha256:959589d13ea2c65cee3ceddcbdcadd3f1dd750ec1dd4ad37271b30a72af447c3)...done
+unpacking docker.io/library/qonductor-quantum-executor:latest (sha256:cd97be25896a1da3cba46f8320cdae2292c901f55ed09f29e7f6a61eee14f4ee)...done
+[SUMMARY] 2026-07-18T10:40:21+08:00 192.168.36.128:k3s-server — all 11 images imported and verified

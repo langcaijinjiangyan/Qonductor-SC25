@@ -5,8 +5,12 @@ import time
 import numpy
 import pytest
 from mqt.bench.utils import get_supported_benchmarks
-from qiskit.providers.ibmq import least_busy
 from qiskit_ibm_provider import IBMProvider
+
+try:
+    from qiskit.providers.ibmq import least_busy
+except ModuleNotFoundError:
+    from qiskit_ibm_provider import least_busy
 
 logging.getLogger("qiskit").setLevel(logging.WARNING)
 logging.getLogger("qiskit_ibm_provider").setLevel(logging.WARNING)
@@ -40,8 +44,12 @@ def benchmark_names():
 
 
 def get_available_backends():
-    provider = IBMProvider()
-    backends = provider.backends(simulator=False, operational=True)
+    try:
+        provider = IBMProvider()
+        backends = provider.backends(simulator=False, operational=True)
+    except Exception:
+        from src.utils.benchmark import get_fake_backends
+        backends = get_fake_backends(remove_retired=True)
     return sorted(backends, key=lambda backend: backend.name)
 
 

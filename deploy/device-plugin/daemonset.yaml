@@ -46,6 +46,8 @@ spec:
           env:
             - name: QONDUCTOR_MODE
               value: "k8s"
+            - name: QONDUCTOR_LOG_LEVEL
+              value: "INFO"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:

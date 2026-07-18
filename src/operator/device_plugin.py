@@ -369,6 +369,10 @@ def create_default_device_plugin(mode: str = "local") -> QPUDevicePlugin:
 # ===================================================================
 
 def main() -> None:
+    from src.utils.logging_config import configure_logging
+
+    configure_logging()
+
     mode = os.environ.get("QONDUCTOR_MODE", "local")
     node_name = os.environ.get("NODE_NAME", "worker")
     qpu_dir = os.environ.get("QPU_PROFILES_DIR", "/etc/qonductor/qpus")

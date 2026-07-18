@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "qnode": "12",
-  "circuits": {
-    "twolocalrandom_indep_qiskit_12": "twolocalrandom_indep_qiskit_12.qasm3"
-  },
-  "hybrid_job": true
-}

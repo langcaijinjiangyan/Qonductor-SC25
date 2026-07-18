@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir \
 # Copy the QPU backend module so the executor can load QPU JSON profiles
 COPY src/ /app/src/
 ENV PYTHONPATH=/app
+ENV QONDUCTOR_LOG_LEVEL=INFO
 
 # Entry point: reads QPU JSON, deserialises QASM circuits, executes, outputs results
 COPY docker/quantum_executor_entry.py /entry.py

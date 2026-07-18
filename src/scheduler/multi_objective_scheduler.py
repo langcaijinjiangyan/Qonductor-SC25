@@ -25,7 +25,7 @@ from pymoo.operators.sampling.rnd import (
     IntegerRandomSampling,
 )
 from pymoo.optimize import minimize
-from qiskit import QuantumCircuit, transpile
+from qiskit import QuantumCircuit, qasm3, transpile
 from qiskit.circuit import Measure, Reset, Gate
 from qiskit.providers import Backend
 from qiskit.providers.fake_provider.fake_backend import FakeBackendV2
@@ -42,6 +42,74 @@ from src.scheduler.base_scheduler import (
 from src.utils.benchmark import load_pre_transpiled_circuit
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_backend_name(backend: Backend) -> str:
+    return getattr(backend, "name", "<unknown>")
+
+
+def _circuit_debug_dump(circuit: QuantumCircuit) -> str:
+    """Return a detailed circuit dump for scheduler diagnostics."""
+    try:
+        circuit_qasm = qasm3.dumps(circuit)
+    except Exception as exc:
+        try:
+            circuit_qasm = circuit.qasm()
+        except Exception as qasm_exc:
+            circuit_qasm = (
+                "<failed to serialize circuit: "
+                f"qasm3={exc!r}; qasm2={qasm_exc!r}>"
+            )
+
+    try:
+        ops = dict(circuit.count_ops())
+    except Exception as exc:
+        ops = {"<count_ops_error>": repr(exc)}
+
+    try:
+        parameters = sorted(str(param) for param in circuit.parameters)
+    except Exception as exc:
+        parameters = [f"<parameters_error: {exc!r}>"]
+
+    try:
+        depth = circuit.depth()
+    except Exception as exc:
+        depth = f"<depth_error: {exc!r}>"
+
+    return (
+        "Circuit debug dump:\n"
+        f"  name={getattr(circuit, 'name', '<unknown>')!r}\n"
+        f"  qubits={getattr(circuit, 'num_qubits', '<unknown>')}\n"
+        f"  clbits={getattr(circuit, 'num_clbits', '<unknown>')}\n"
+        f"  depth={depth}\n"
+        f"  ops={ops}\n"
+        f"  parameters={parameters}\n"
+        "  qasm3:\n"
+        f"{circuit_qasm}"
+    )
+
+
+def _backend_debug_dump(backend: Backend) -> str:
+    """Return backend details that affect transpilation."""
+    try:
+        operation_names = sorted(getattr(backend, "operation_names", []) or [])
+    except Exception as exc:
+        operation_names = [f"<operation_names_error: {exc!r}>"]
+
+    try:
+        coupling_map = getattr(backend, "coupling_map", None)
+        coupling_edges = coupling_map.get_edges() if coupling_map else []
+    except Exception as exc:
+        coupling_edges = [f"<coupling_map_error: {exc!r}>"]
+
+    return (
+        "Backend debug dump:\n"
+        f"  name={_safe_backend_name(backend)!r}\n"
+        f"  num_qubits={getattr(backend, 'num_qubits', '<unknown>')}\n"
+        f"  processor_type={getattr(backend, 'processor_type', '<unknown>')!r}\n"
+        f"  operation_names={operation_names}\n"
+        f"  coupling_edges={coupling_edges}"
+    )
 
 
 class TranspilationLevel(Enum):
@@ -438,22 +506,40 @@ class MultiObjectiveScheduler(BaseScheduler):
         :return: The transpiled circuit and the fidelity
         """
         # Check if the circuit can be transpiled for the backend
-        if circuit.num_qubits <= backend.num_qubits:
+        if circuit.num_qubits > backend.num_qubits:
+            return None, 0.0
+
+        try:
             # Transpile the circuit multiple times due to the stochastic nature
             # of the transpiler
-            transpiled_circuits = transpile(
-                [circuit] * self.transpilation_count,
-                backend=backend,
-                optimization_level=3,
-            )
+            try:
+                transpiled_circuits = transpile(
+                    [circuit] * self.transpilation_count,
+                    backend=backend,
+                    optimization_level=3,
+                )
+            except Exception:
+                logger.exception(
+                    "Initial Qiskit transpile failed "
+                    "(backend=%s, optimization_level=3, transpilation_count=%s)\n"
+                    "%s\n%s",
+                    _safe_backend_name(backend),
+                    self.transpilation_count,
+                    _backend_debug_dump(backend),
+                    _circuit_debug_dump(circuit),
+                )
+                return None, 0.0
+
             # Choose the circuit with the lowest number of SWAP gates
             swap_gate = set(backend.operation_names).intersection(
                 {"cx", "cz", "ecr"}
             )
             if not swap_gate:
                 logger.error(
-                    "Cannot find swap gate for backend %s",
-                    backend.name,
+                    "Cannot find swap gate for backend %s\n%s\n%s",
+                    _safe_backend_name(backend),
+                    _backend_debug_dump(backend),
+                    _circuit_debug_dump(circuit),
                 )
                 return None, 0.0
             swap_gate = swap_gate.pop()
@@ -469,20 +555,53 @@ class MultiObjectiveScheduler(BaseScheduler):
             deflated_circuit = deflate_circuit(best_transpiled_circuit)
 
             # Find the best layout for the deflated circuit
-            layouts = matching_layouts(deflated_circuit, backend.coupling_map,
-                                       strict_direction=False)
+            layouts = matching_layouts(
+                deflated_circuit,
+                backend.coupling_map,
+                strict_direction=False,
+            )
             if layouts:
                 best_layout, fidelity = self._get_best_layout(
                     deflated_circuit, backend, layouts
                 )
-                best_circuit = transpile(
-                    deflated_circuit,
-                    backend=backend,
-                    initial_layout=best_layout,
-                    optimization_level=0,
-                )
+                try:
+                    best_circuit = transpile(
+                        deflated_circuit,
+                        backend=backend,
+                        initial_layout=best_layout,
+                        optimization_level=0,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Final Qiskit transpile failed "
+                        "(backend=%s, optimization_level=0, initial_layout=%s)\n"
+                        "%s\nOriginal %s\nDeflated %s",
+                        _safe_backend_name(backend),
+                        best_layout,
+                        _backend_debug_dump(backend),
+                        _circuit_debug_dump(circuit),
+                        _circuit_debug_dump(deflated_circuit),
+                    )
+                    return None, 0.0
 
                 return best_circuit, fidelity
+            logger.error(
+                "No matching layouts found during transpilation "
+                "(backend=%s)\n%s\n%s",
+                _safe_backend_name(backend),
+                _backend_debug_dump(backend),
+                _circuit_debug_dump(deflated_circuit),
+            )
+            return None, 0.0
+        except Exception:
+            logger.exception(
+                "Unexpected error in transpilation pipeline "
+                "(backend=%s)\n%s\n%s",
+                _safe_backend_name(backend),
+                _backend_debug_dump(backend),
+                _circuit_debug_dump(circuit),
+            )
+            return None, 0.0
 
         return None, 0.0
 

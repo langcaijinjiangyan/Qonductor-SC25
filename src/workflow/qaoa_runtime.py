@@ -19,6 +19,7 @@ import uuid
 from typing import Any
 
 from src.operator.k8s_client import K8sClient, QUANTUM_JOB_PLURAL
+from src.utils.logging_config import configure_logging
 
 DEFAULT_QAOA_EDGES: tuple[tuple[int, int], ...] = (
     (0, 1), (0, 4), (0, 5), (0, 6), (0, 8), (0, 9),
@@ -149,7 +150,6 @@ def submit_quantum_eval(
             "parameterBindings": parameter_bindings,
             "iteration": iteration,
             "evalLabel": eval_label,
-            "scheduleImmediately": True,
         },
         "status": {"phase": "Pending"},
     }
@@ -193,6 +193,8 @@ def run_qaoa_spsa_driver(
     config: dict[str, Any] | None = None,
     client: K8sClient | None = None,
 ) -> dict[str, Any]:
+    configure_logging()
+
     cfg = _load_runtime_config(config)
     mode = os.environ.get("QONDUCTOR_MODE", "k8s")
     namespace = os.environ.get("QONDUCTOR_NAMESPACE", "default")

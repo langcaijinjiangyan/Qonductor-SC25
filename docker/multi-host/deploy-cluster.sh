@@ -986,7 +986,7 @@ sync_qpu_profiles() {
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
     for host in "${hosts[@]}"; do
-        _run "$host" "sudo mkdir -p /etc/qonductor/qpus && sudo rm -f /etc/qonductor/qpus/*.json"
+        _run "$host" "sudo mkdir -p /etc/qonductor/qpus && sudo find /etc/qonductor/qpus -maxdepth 1 -type f -name '*.json' -delete"
     done
 
     for ((i = 0; i < AGENTS_COUNT; i++)); do

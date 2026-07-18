@@ -291,7 +291,6 @@ def _submit_quantum_job_qonductor(
             "parameterBindings": param_bindings,
             "iteration": iteration,
             "evalLabel": eval_label,
-            "scheduleImmediately": True,
         },
         "status": {"phase": "Pending"},
     }

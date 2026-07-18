@@ -304,7 +304,7 @@ class QuantumSchedulerController:
 
     def schedule_pending_now(self) -> dict | None:
         """Force an immediate scheduling cycle (useful for tests)."""
-        return self._run_scheduling_cycle()
+        return self._safe_run_scheduling_cycle()
 
     def get_result(self, step_id: str) -> dict | None:
         """Retrieve the scheduling result for a specific quantum step."""
@@ -371,15 +371,25 @@ class QuantumSchedulerController:
         if any(qj.schedule_immediately for qj in self._pending):
             logger.info("Trigger: scheduleImmediately requested, queue size=%d",
                         queue_size)
-            self._run_scheduling_cycle()
+            self._safe_run_scheduling_cycle()
         elif queue_size >= self.scheduling_threshold:
             logger.info("Trigger: queue size %d >= threshold %d",
                         queue_size, self.scheduling_threshold)
-            self._run_scheduling_cycle()
+            self._safe_run_scheduling_cycle()
         elif elapsed >= self.scheduling_interval and queue_size > 0:
             logger.info("Trigger: interval %.0fs elapsed, queue size=%d",
                         elapsed, queue_size)
-            self._run_scheduling_cycle()
+            self._safe_run_scheduling_cycle()
+
+    def _safe_run_scheduling_cycle(self) -> dict | None:
+        """Run one scheduling cycle without letting exceptions kill the thread."""
+        try:
+            return self._run_scheduling_cycle()
+        except Exception:
+            logger.exception(
+                "Quantum scheduling cycle failed; controller will keep running",
+            )
+            return None
 
     def _build_scheduling_job(self, qj: _PendingQuantumJob) -> SchedulingJob:
         """Convert a QuantumJob CR into the scheduler's native job object."""
@@ -492,14 +502,20 @@ class QuantumSchedulerController:
                 }
                 self._scheduling_results[qj.step_id] = result_entry
                 cycle_results[qj.step_id] = result_entry
-                self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
-                    "phase": "Failed",
-                    "conditions": [{
-                        "type": "CircuitMaterializationFailed",
-                        "status": "True",
-                        "reason": str(exc),
-                    }],
-                })
+                try:
+                    self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
+                        "phase": "Failed",
+                        "conditions": [{
+                            "type": "CircuitMaterializationFailed",
+                            "status": "True",
+                            "reason": str(exc),
+                        }],
+                    })
+                except Exception:
+                    logger.exception(
+                        "Failed to mark QuantumJob %s as materialization failed",
+                        qj.cr_name,
+                    )
 
         pending = valid_pending
         if not pending:
@@ -581,14 +597,23 @@ class QuantumSchedulerController:
             cycle_results[qj.step_id] = result_entry
 
             # Update QuantumJob CR status to Scheduled with estimates
-            self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
-                "phase": "Scheduled",
-                "assignedQPU": backend.name if backend else "none",
-                "scheduledAt": now_ts,
-                "estimatedFidelity": est_fidelity,
-                "estimatedExecutionTime": est_exec_time,
-                "schedulingMetadata": scheduler_metadata,
-            })
+            try:
+                self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
+                    "phase": "Scheduled",
+                    "assignedQPU": backend.name if backend else "none",
+                    "scheduledAt": now_ts,
+                    "estimatedFidelity": est_fidelity,
+                    "estimatedExecutionTime": est_exec_time,
+                    "schedulingMetadata": scheduler_metadata,
+                })
+            except Exception:
+                logger.exception(
+                    "Failed to update scheduled status for QuantumJob %s; "
+                    "re-queueing for a later scheduling cycle",
+                    qj.cr_name,
+                )
+                self._pending.append(qj)
+                continue
 
             # Dispatch a K8s Job to execute the circuit on the assigned
             # QPU's quantum worker node (via nodeAffinity).
@@ -601,9 +626,16 @@ class QuantumSchedulerController:
                     client_override=self.k8s,
                 )
                 self._execution_jobs[qj.step_id] = exec_job_name
-                self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
-                    "executionJob": exec_job_name,
-                })
+                try:
+                    self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
+                        "executionJob": exec_job_name,
+                    })
+                except Exception:
+                    logger.exception(
+                        "Failed to record execution Job '%s' on QuantumJob %s",
+                        exec_job_name,
+                        qj.cr_name,
+                    )
                 logger.info(
                     "Dispatched quantum execution Job '%s' for step '%s' "
                     "→ QPU '%s' (node=%s)",
@@ -625,12 +657,18 @@ class QuantumSchedulerController:
             }
             self._scheduling_results[qj.step_id] = result_entry
             cycle_results[qj.step_id] = result_entry
-            self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
-                "phase": "Failed",
-                "conditions": [{"type": "Rejected",
-                                "status": "True",
-                                "reason": "No suitable QPU found"}],
-            })
+            try:
+                self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
+                    "phase": "Failed",
+                    "conditions": [{"type": "Rejected",
+                                    "status": "True",
+                                    "reason": "No suitable QPU found"}],
+                })
+            except Exception:
+                logger.exception(
+                    "Failed to mark rejected QuantumJob %s as failed",
+                    qj.cr_name,
+                )
 
         logger.info(
             "Scheduling complete: %d assigned, %d rejected, "

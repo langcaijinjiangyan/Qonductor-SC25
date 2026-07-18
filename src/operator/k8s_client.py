@@ -60,6 +60,30 @@ except ImportError:
     logger.warning("kubernetes client not available — using local simulation mode")
 
 
+def _is_too_many_requests(exc: Exception) -> bool:
+    """Return True when a Kubernetes client exception is HTTP 429."""
+    return getattr(exc, "status", None) == 429
+
+
+def _retry_after_seconds(exc: Exception) -> float | None:
+    """Extract a Retry-After delay from Kubernetes ApiException headers."""
+    headers = getattr(exc, "headers", None) or {}
+    if not isinstance(headers, dict):
+        headers = dict(headers)
+
+    raw = (
+        headers.get("Retry-After")
+        or headers.get("retry-after")
+    )
+    if raw is None:
+        return None
+
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Local (non-K8s) simulation store
 # ---------------------------------------------------------------------------
@@ -458,12 +482,62 @@ class K8sClient:
         if self.mode == "k8s" and self._custom_api:
             plural = (HYBRID_WORKFLOW_PLURAL if "workflow" in kind.lower()
                       else QUANTUM_JOB_PLURAL)
-            return self._custom_api.patch_namespaced_custom_object_status(
-                group=HYBRID_WORKFLOW_GROUP, version=HYBRID_WORKFLOW_VERSION,
-                namespace="default", plural=plural, name=name,
-                body={"status": status},
+            return self._patch_cr_status_with_retry(
+                plural=plural,
+                name=name,
+                status=status,
             )
         return self._store.patch_status(kind, name, status)
+
+    def _patch_cr_status_with_retry(
+        self,
+        *,
+        plural: str,
+        name: str,
+        status: dict,
+    ) -> dict:
+        """Patch a CR status, retrying Kubernetes APF throttling responses."""
+        max_attempts = max(
+            1,
+            int(os.environ.get("QONDUCTOR_STATUS_PATCH_RETRIES", "6")),
+        )
+        base_delay = max(
+            0.0,
+            float(os.environ.get("QONDUCTOR_STATUS_PATCH_BACKOFF_SECONDS", "0.5")),
+        )
+        max_delay = max(
+            base_delay,
+            float(os.environ.get("QONDUCTOR_STATUS_PATCH_MAX_BACKOFF_SECONDS", "10")),
+        )
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return self._custom_api.patch_namespaced_custom_object_status(
+                    group=HYBRID_WORKFLOW_GROUP,
+                    version=HYBRID_WORKFLOW_VERSION,
+                    namespace="default",
+                    plural=plural,
+                    name=name,
+                    body={"status": status},
+                )
+            except Exception as exc:
+                if not _is_too_many_requests(exc) or attempt >= max_attempts:
+                    raise
+                delay = _retry_after_seconds(exc)
+                if delay is None:
+                    delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
+                logger.warning(
+                    "Status patch for %s/%s throttled by apiserver "
+                    "(attempt %d/%d); retrying in %.1fs",
+                    plural,
+                    name,
+                    attempt,
+                    max_attempts,
+                    delay,
+                )
+                time.sleep(delay)
+
+        raise RuntimeError("unreachable status patch retry state")
 
     def delete_cr(self, kind: str, name: str) -> bool:
         if self.mode == "k8s" and self._custom_api:
@@ -736,6 +810,16 @@ def _merge_env(*env_lists: list[dict] | None) -> list[dict]:
     return list(merged.values())
 
 
+def _qonductor_runtime_env() -> list[dict[str, str]]:
+    """Environment propagated from controllers into child runtime Pods."""
+    return [
+        {
+            "name": "QONDUCTOR_LOG_LEVEL",
+            "value": os.environ.get("QONDUCTOR_LOG_LEVEL", "INFO"),
+        },
+    ]
+
+
 def _rfc1123_name(*parts: str, max_length: int = 63) -> str:
     """Build a Kubernetes-safe resource name from arbitrary identifiers."""
     raw = "-".join(str(part) for part in parts if part)
@@ -861,6 +945,7 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
         )
 
     runtime_env = [
+        *_qonductor_runtime_env(),
         {"name": "QONDUCTOR_MODE", "value": mode},
         {"name": "QONDUCTOR_NAMESPACE", "value": cr.get("metadata", {}).get("namespace", "default")},
         {"name": "QONDUCTOR_WORKFLOW_NAME", "value": workflow_name},
@@ -1012,6 +1097,7 @@ def create_quantum_execution_job(
                         "image": "qonductor-quantum-executor:latest",
                         "imagePullPolicy": "IfNotPresent",
                         "env": [
+                            *_qonductor_runtime_env(),
                             {"name": "QONDUCTOR_MODE", "value": mode},
                             {"name": "QONDUCTOR_NAMESPACE", "value": quantum_job_cr.get("metadata", {}).get("namespace", "default")},
                             {"name": "QUANTUM_JOB_NAME", "value": qj_name},

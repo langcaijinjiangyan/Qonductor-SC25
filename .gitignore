@@ -1,7 +1,8 @@
 data/benchmarks/benchmarks_unpacked
 data/database/circuits_unpacked
-data/workflow_registry/
+data/workflow_registry
 data/batch_results
+data/deploy_logs/containerd_import
 qslurm_workloads
 .vscode/
 *.pyc

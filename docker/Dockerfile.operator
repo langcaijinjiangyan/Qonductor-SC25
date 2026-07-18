@@ -35,6 +35,7 @@ COPY data/   /app/data/
 
 ENV PYTHONPATH=/app
 ENV QONDUCTOR_MODE=k8s
+ENV QONDUCTOR_LOG_LEVEL=INFO
 
 # Entry point: the operator controller loop.
 CMD ["python", "-m", "src.operator.controller"]

@@ -26,6 +26,7 @@ import sys
 import time
 from typing import Any
 
+from src.utils.logging_config import configure_logging
 from qiskit import QuantumCircuit, qasm3, transpile
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, ReadoutError
@@ -139,6 +140,8 @@ def _patch_quantum_job_status(status: dict[str, Any]) -> None:
 
 
 def main() -> None:
+    configure_logging()
+
     qpu_name = os.environ.get("QPU_NAME", "")
     qpu_json_path = os.environ.get("QPU_JSON_PATH", "")
     shots = int(os.environ.get("SHOTS", "4000"))
