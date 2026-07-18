@@ -65,8 +65,8 @@ def invoke_with_controller(
     image_id: str,
     inputs: dict[str, Any] | None = None,
     mode: str = "local",
-    scheduling_interval: int = 120,
-    scheduling_threshold: int = 100,
+    scheduling_interval: int = 30,
+    scheduling_threshold: int = 10,
 ) -> str:
     """Like ``invoke()`` but dispatches through the HybridWorkflowController
     to actually execute the workflow (not just store the plan).
@@ -254,8 +254,8 @@ def invoke(
     image_id: str,
     inputs: dict[str, Any] | None = None,
     mode: str = "local",
-    scheduling_interval: int = 120,
-    scheduling_threshold: int = 100,
+    scheduling_interval: int = 30,
+    scheduling_threshold: int = 10,
 ) -> str:
     """Invoke (run) a deployed workflow.
 

@@ -52,8 +52,8 @@ spec:
   scheduling:
     classicalPolicy: FilterScore   # K8s kube-scheduler (native)
     quantumPolicy: NSGA2           # Qonductor multi-objective NSGA-II
-    schedulingInterval: 120        # seconds
-    schedulingThreshold: 100       # pending jobs
+    schedulingInterval: 30         # seconds
+    schedulingThreshold: 10        # pending jobs
 
   errorMitigation:
     enabled: true

@@ -585,8 +585,8 @@ def main() -> None:
 
     mode = os.environ.get("QONDUCTOR_MODE", "local")
     registry_root = os.environ.get("QONDUCTOR_REGISTRY_ROOT", "data/workflow_registry")
-    scheduling_interval = int(os.environ.get("QONDUCTOR_SCHEDULING_INTERVAL", "120"))
-    scheduling_threshold = int(os.environ.get("QONDUCTOR_SCHEDULING_THRESHOLD", "100"))
+    scheduling_interval = int(os.environ.get("QONDUCTOR_SCHEDULING_INTERVAL", "30"))
+    scheduling_threshold = int(os.environ.get("QONDUCTOR_SCHEDULING_THRESHOLD", "10"))
     metrics_port = int(os.environ.get("QONDUCTOR_METRICS_PORT", "9100"))
 
     quantum_controller = QuantumSchedulerController(

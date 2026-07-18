@@ -21,11 +21,13 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator, Optional
+from typing import Any, Callable, Iterator, Optional, TypeVar
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -49,7 +51,7 @@ _MEMORY_UNITS = {
     "T": 1000 ** 4,
 }
 
-# Try to import the real K8s client; fall back to local simulation.
+# Try to import the real K8s client; explicit local mode does not need it.
 try:
     from kubernetes import client, config, watch
     from kubernetes.client.rest import ApiException
@@ -57,12 +59,7 @@ try:
 except ImportError:
     ApiException = None  # type: ignore
     _HAS_K8S = False
-    logger.warning("kubernetes client not available — using local simulation mode")
-
-
-def _is_too_many_requests(exc: Exception) -> bool:
-    """Return True when a Kubernetes client exception is HTTP 429."""
-    return getattr(exc, "status", None) == 429
+    logger.warning("kubernetes client not available; k8s mode is unavailable")
 
 
 def _retry_after_seconds(exc: Exception) -> float | None:
@@ -82,6 +79,14 @@ def _retry_after_seconds(exc: Exception) -> float | None:
         return max(0.0, float(raw))
     except (TypeError, ValueError):
         return None
+
+
+def _is_retryable_k8s_error(exc: Exception) -> bool:
+    """Return True when retrying a Kubernetes API call may succeed."""
+    status = getattr(exc, "status", None)
+    if status is None:
+        return True
+    return status == 429 or status >= 500
 
 
 # ---------------------------------------------------------------------------
@@ -409,29 +414,78 @@ class K8sClient:
     """
 
     def __init__(self, mode: str = "local"):
-        # Auto-downgrade K8s mode to local if the cluster is unreachable.
-        effective_mode = mode
+        if mode not in ("local", "k8s"):
+            raise ValueError(f"Unsupported Qonductor mode: {mode!r}")
         if mode == "k8s":
+            if not _HAS_K8S:
+                raise RuntimeError(
+                    "QONDUCTOR_MODE=k8s requires the kubernetes Python client; "
+                    "refusing to fall back to local mode."
+                )
             customs = _get_k8s_custom_api()
             core, batch = _get_k8s_api()
-            if customs is None or core is None:
-                logger.warning(
-                    "K8s cluster unreachable — falling back to local mode."
+            if customs is None or core is None or batch is None:
+                raise RuntimeError(
+                    "QONDUCTOR_MODE=k8s but the Kubernetes API is unreachable "
+                    "or no kubeconfig/in-cluster config could be loaded; "
+                    "refusing to fall back to local mode."
                 )
-                effective_mode = "local"
-                self._custom_api = None
-                self._core_api = None
-                self._batch_api = None
-            else:
-                self._custom_api = customs
-                self._core_api = core
-                self._batch_api = batch
+            self._custom_api = customs
+            self._core_api = core
+            self._batch_api = batch
         else:
             self._custom_api = None
             self._core_api = None
             self._batch_api = None
-        self.mode = effective_mode
+        self.mode = mode
         self._store = _get_store()
+
+    @staticmethod
+    def _with_k8s_retry(operation: str, func: Callable[[], _T]) -> _T:
+        """Run a Kubernetes API call with bounded exponential backoff."""
+        max_attempts = max(
+            1,
+            int(os.environ.get(
+                "QONDUCTOR_K8S_API_RETRIES",
+                os.environ.get("QONDUCTOR_STATUS_PATCH_RETRIES", "6"),
+            )),
+        )
+        base_delay = max(
+            0.0,
+            float(os.environ.get(
+                "QONDUCTOR_K8S_API_BACKOFF_SECONDS",
+                os.environ.get("QONDUCTOR_STATUS_PATCH_BACKOFF_SECONDS", "0.5"),
+            )),
+        )
+        max_delay = max(
+            base_delay,
+            float(os.environ.get(
+                "QONDUCTOR_K8S_API_MAX_BACKOFF_SECONDS",
+                os.environ.get("QONDUCTOR_STATUS_PATCH_MAX_BACKOFF_SECONDS", "10"),
+            )),
+        )
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return func()
+            except Exception as exc:
+                if not _is_retryable_k8s_error(exc) or attempt >= max_attempts:
+                    raise
+                delay = _retry_after_seconds(exc)
+                if delay is None:
+                    delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
+                logger.warning(
+                    "K8s API call %s failed (attempt %d/%d): %s; "
+                    "retrying in %.1fs",
+                    operation,
+                    attempt,
+                    max_attempts,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+
+        raise RuntimeError(f"unreachable K8s retry state for {operation}")
 
     # -- CR operations ----------------------------------------------------
 
@@ -445,24 +499,28 @@ class K8sClient:
             version = HYBRID_WORKFLOW_VERSION
             plural = (HYBRID_WORKFLOW_PLURAL if "workflow" in kind.lower()
                       else QUANTUM_JOB_PLURAL)
-            try:
-                result = self._custom_api.create_namespaced_custom_object(
+            return self._with_k8s_retry(
+                f"create {plural}",
+                lambda: self._custom_api.create_namespaced_custom_object(
                     group=group, version=version, namespace=namespace,
                     plural=plural, body=body,
-                )
-                return result
-            except Exception as exc:
-                logger.warning("K8s API call failed: %s — falling back to local", exc)
-                self.mode = "local"  # permanent fallback for this client
+                ),
+            )
         return self._store.create(kind, body)
 
     def get_cr(self, kind: str, name: str) -> Optional[dict]:
         if self.mode == "k8s" and self._custom_api:
             plural = (HYBRID_WORKFLOW_PLURAL if "workflow" in kind.lower()
                       else QUANTUM_JOB_PLURAL)
-            return self._custom_api.get_namespaced_custom_object(
-                group=HYBRID_WORKFLOW_GROUP, version=HYBRID_WORKFLOW_VERSION,
-                namespace="default", plural=plural, name=name,
+            return self._with_k8s_retry(
+                f"get {plural}/{name}",
+                lambda: self._custom_api.get_namespaced_custom_object(
+                    group=HYBRID_WORKFLOW_GROUP,
+                    version=HYBRID_WORKFLOW_VERSION,
+                    namespace="default",
+                    plural=plural,
+                    name=name,
+                ),
             )
         return self._store.get(kind, name)
 
@@ -470,9 +528,14 @@ class K8sClient:
         if self.mode == "k8s" and self._custom_api:
             plural = (HYBRID_WORKFLOW_PLURAL if "workflow" in kind.lower()
                       else QUANTUM_JOB_PLURAL)
-            result = self._custom_api.list_namespaced_custom_object(
-                group=HYBRID_WORKFLOW_GROUP, version=HYBRID_WORKFLOW_VERSION,
-                namespace="default", plural=plural,
+            result = self._with_k8s_retry(
+                f"list {plural}",
+                lambda: self._custom_api.list_namespaced_custom_object(
+                    group=HYBRID_WORKFLOW_GROUP,
+                    version=HYBRID_WORKFLOW_VERSION,
+                    namespace="default",
+                    plural=plural,
+                ),
             )
             return result.get("items", [])
         return self._store.list(kind)
@@ -496,56 +559,32 @@ class K8sClient:
         name: str,
         status: dict,
     ) -> dict:
-        """Patch a CR status, retrying Kubernetes APF throttling responses."""
-        max_attempts = max(
-            1,
-            int(os.environ.get("QONDUCTOR_STATUS_PATCH_RETRIES", "6")),
+        """Patch a CR status through the Kubernetes API with retry."""
+        return self._with_k8s_retry(
+            f"patch status {plural}/{name}",
+            lambda: self._custom_api.patch_namespaced_custom_object_status(
+                group=HYBRID_WORKFLOW_GROUP,
+                version=HYBRID_WORKFLOW_VERSION,
+                namespace="default",
+                plural=plural,
+                name=name,
+                body={"status": status},
+            ),
         )
-        base_delay = max(
-            0.0,
-            float(os.environ.get("QONDUCTOR_STATUS_PATCH_BACKOFF_SECONDS", "0.5")),
-        )
-        max_delay = max(
-            base_delay,
-            float(os.environ.get("QONDUCTOR_STATUS_PATCH_MAX_BACKOFF_SECONDS", "10")),
-        )
-
-        for attempt in range(1, max_attempts + 1):
-            try:
-                return self._custom_api.patch_namespaced_custom_object_status(
-                    group=HYBRID_WORKFLOW_GROUP,
-                    version=HYBRID_WORKFLOW_VERSION,
-                    namespace="default",
-                    plural=plural,
-                    name=name,
-                    body={"status": status},
-                )
-            except Exception as exc:
-                if not _is_too_many_requests(exc) or attempt >= max_attempts:
-                    raise
-                delay = _retry_after_seconds(exc)
-                if delay is None:
-                    delay = min(max_delay, base_delay * (2 ** (attempt - 1)))
-                logger.warning(
-                    "Status patch for %s/%s throttled by apiserver "
-                    "(attempt %d/%d); retrying in %.1fs",
-                    plural,
-                    name,
-                    attempt,
-                    max_attempts,
-                    delay,
-                )
-                time.sleep(delay)
-
-        raise RuntimeError("unreachable status patch retry state")
 
     def delete_cr(self, kind: str, name: str) -> bool:
         if self.mode == "k8s" and self._custom_api:
             plural = (HYBRID_WORKFLOW_PLURAL if "workflow" in kind.lower()
                       else QUANTUM_JOB_PLURAL)
-            self._custom_api.delete_namespaced_custom_object(
-                group=HYBRID_WORKFLOW_GROUP, version=HYBRID_WORKFLOW_VERSION,
-                namespace="default", plural=plural, name=name,
+            self._with_k8s_retry(
+                f"delete {plural}/{name}",
+                lambda: self._custom_api.delete_namespaced_custom_object(
+                    group=HYBRID_WORKFLOW_GROUP,
+                    version=HYBRID_WORKFLOW_VERSION,
+                    namespace="default",
+                    plural=plural,
+                    name=name,
+                ),
             )
             return True
         return self._store.delete(kind, name)
@@ -617,9 +656,13 @@ class K8sClient:
     def get_nodes(self, label_selector: str = "") -> list[dict]:
         """Return nodes that optionally match *label_selector*."""
         if self.mode == "k8s" and self._core_api:
-            nodes = self._core_api.list_node(
-                label_selector=label_selector,
-            ).items
+            result = self._with_k8s_retry(
+                "list nodes",
+                lambda: self._core_api.list_node(
+                    label_selector=label_selector,
+                ),
+            )
+            nodes = result.items
             return [self._node_to_dict(n) for n in nodes]
         nodes = self._store.list_nodes()
         if label_selector:
@@ -633,9 +676,12 @@ class K8sClient:
                                       resources: dict) -> None:
         """Add or update extended resources on a node (e.g. quantum.ibm.com/qpu)."""
         if self.mode == "k8s" and self._core_api:
-            self._core_api.patch_node(
-                node_name,
-                {"status": {"capacity": resources, "allocatable": resources}},
+            self._with_k8s_retry(
+                f"patch node {node_name} extended resources",
+                lambda: self._core_api.patch_node(
+                    node_name,
+                    {"status": {"capacity": resources, "allocatable": resources}},
+                ),
             )
         else:
             node = self._store.get_node(node_name)
@@ -671,8 +717,11 @@ class K8sClient:
         Returns the job name.
         """
         if self.mode == "k8s" and self._batch_api:
-            result = self._batch_api.create_namespaced_job(
-                namespace=namespace, body=job_manifest,
+            result = self._with_k8s_retry(
+                "create job",
+                lambda: self._batch_api.create_namespaced_job(
+                    namespace=namespace, body=job_manifest,
+                ),
             )
             return result.metadata.name
         return self._store.create("jobs", job_manifest)["metadata"]["name"]
@@ -680,8 +729,11 @@ class K8sClient:
     def get_job_status(self, name: str,
                        namespace: str = "default") -> Optional[dict]:
         if self.mode == "k8s" and self._batch_api:
-            j = self._batch_api.read_namespaced_job_status(
-                name=name, namespace=namespace,
+            j = self._with_k8s_retry(
+                f"read job status {name}",
+                lambda: self._batch_api.read_namespaced_job_status(
+                    name=name, namespace=namespace,
+                ),
             )
             return {"active": j.status.active, "succeeded": j.status.succeeded,
                     "failed": j.status.failed}
@@ -699,18 +751,24 @@ class K8sClient:
                          labels: dict | None = None,
                          namespace: str = "default") -> dict:
         if self.mode == "k8s" and self._core_api:
-            return self._core_api.create_namespaced_config_map(
-                namespace=namespace,
-                body={
-                    "metadata": {"name": name, "labels": labels or {}},
-                    "data": data,
-                },
+            return self._with_k8s_retry(
+                f"create configmap {name}",
+                lambda: self._core_api.create_namespaced_config_map(
+                    namespace=namespace,
+                    body={
+                        "metadata": {"name": name, "labels": labels or {}},
+                        "data": data,
+                    },
+                ),
             )
         return self._store.create_configmap(name, data, labels=labels)
 
     def get_configmap(self, name: str) -> Optional[dict]:
         if self.mode == "k8s" and self._core_api:
-            cm = self._core_api.read_namespaced_config_map(name, "default")
+            cm = self._with_k8s_retry(
+                f"read configmap {name}",
+                lambda: self._core_api.read_namespaced_config_map(name, "default"),
+            )
             return {"data": cm.data}
         return self._store.get_configmap(name)
 
@@ -718,9 +776,12 @@ class K8sClient:
                         namespace: str = "default") -> list[dict]:
         """List ConfigMaps, optionally filtered by label selector."""
         if self.mode == "k8s" and self._core_api:
-            result = self._core_api.list_namespaced_config_map(
-                namespace=namespace,
-                label_selector=label_selector or None,
+            result = self._with_k8s_retry(
+                "list configmaps",
+                lambda: self._core_api.list_namespaced_config_map(
+                    namespace=namespace,
+                    label_selector=label_selector or None,
+                ),
             )
             return [
                 {
@@ -742,18 +803,25 @@ class K8sClient:
             body = {"data": data}
             if labels is not None:
                 body["metadata"] = {"labels": labels}
-            return self._core_api.patch_namespaced_config_map(
-                name=name, namespace=namespace,
-                body=body,
+            return self._with_k8s_retry(
+                f"patch configmap {name}",
+                lambda: self._core_api.patch_namespaced_config_map(
+                    name=name,
+                    namespace=namespace,
+                    body=body,
+                ),
             )
         return self._store.update_configmap(name, data, labels=labels)
 
     def list_jobs(self, label_selector: str = "") -> list[dict]:
         """List K8s Jobs, optionally filtered by label selector."""
         if self.mode == "k8s" and self._batch_api:
-            result = self._batch_api.list_namespaced_job(
-                namespace="default",
-                label_selector=label_selector or None,
+            result = self._with_k8s_retry(
+                "list jobs",
+                lambda: self._batch_api.list_namespaced_job(
+                    namespace="default",
+                    label_selector=label_selector or None,
+                ),
             )
             return [
                 {
@@ -779,8 +847,13 @@ class K8sClient:
                   namespace: str = "default") -> dict:
         """Patch a K8s Job (used for suspend/unsuspend)."""
         if self.mode == "k8s" and self._batch_api:
-            return self._batch_api.patch_namespaced_job(
-                name=name, namespace=namespace, body=body,
+            return self._with_k8s_retry(
+                f"patch job {name}",
+                lambda: self._batch_api.patch_namespaced_job(
+                    name=name,
+                    namespace=namespace,
+                    body=body,
+                ),
             )
         return self._store.patch_job(name, body) or {}
 
@@ -870,8 +943,8 @@ def create_hybrid_workflow_cr(
             "scheduling": {
                 "classicalPolicy": "FilterScore",
                 "quantumPolicy": "NSGA2",
-                "schedulingInterval": 120,
-                "schedulingThreshold": 100,
+                "schedulingInterval": 30,
+                "schedulingThreshold": 10,
             },
             "errorMitigation": {"enabled": True, "stackedTechniques": []},
             "workflowInputs": workflow_inputs or {},

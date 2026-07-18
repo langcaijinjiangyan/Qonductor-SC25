@@ -35,8 +35,8 @@ class SchedulingManager:
         data_folder: pathlib.Path,
         backends: list[Backend] = None,
         scheduler: BaseScheduler = None,
-        scheduling_interval: int = 120,
-        scheduling_threshold: int = 100,
+        scheduling_interval: int = 30,
+        scheduling_threshold: int = 10,
     ):
         """
         Initialize the scheduling manager

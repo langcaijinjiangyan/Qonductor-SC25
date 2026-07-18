@@ -85,14 +85,14 @@ def _auto_frequency(job_count: int) -> float:
 def _auto_interval(job_count: int) -> int:
     """Auto-scale scheduling interval to the job count.
 
-    Small experiments shouldn't wait 120 s for the first round.
+    Small experiments shouldn't wait 30 s for the first round.
     """
     if job_count <= 20:
         return 5
     elif job_count <= 500:
         return 20
     else:
-        return 120
+        return 30
 
 
 def _auto_threshold(job_count: int) -> int:
@@ -102,7 +102,7 @@ def _auto_threshold(job_count: int) -> int:
     elif job_count <= 500:
         return 20
     else:
-        return 100
+        return 10
 
 
 def _auto_drain_wait(job_count: int) -> int:
@@ -112,7 +112,7 @@ def _auto_drain_wait(job_count: int) -> int:
     elif job_count <= 500:
         return 40
     else:
-        return 180  # scheduling_interval (120 s) + 60 s buffer
+        return 90  # scheduling_interval (30 s) + 60 s buffer
 
 
 def _decay_backends(backends: list, elapsed: float) -> float:
@@ -170,9 +170,9 @@ class EndToEndExperiment:
     scheduler_type : str
         ``"qonductor"`` or ``"fcfs"``.
     scheduling_interval : int
-        Seconds between forced scheduling rounds (default 120).
+        Seconds between forced scheduling rounds (default 30).
     scheduling_threshold : int
-        Queue depth that triggers an immediate scheduling round (default 100).
+        Queue depth that triggers an immediate scheduling round (default 10).
     """
 
     def __init__(

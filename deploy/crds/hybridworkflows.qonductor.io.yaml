@@ -115,11 +115,11 @@ spec:
                         multi-objective genetic algorithm.
                     schedulingInterval:
                       type: integer
-                      default: 120
+                      default: 30
                       description: Scheduling interval in seconds (§7 triggers).
                     schedulingThreshold:
                       type: integer
-                      default: 100
+                      default: 10
                       description: >
                         Queue size that triggers immediate scheduling (§7).
                 errorMitigation:

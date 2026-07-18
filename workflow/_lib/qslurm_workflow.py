@@ -88,7 +88,7 @@ def build_manifest(
             "scheduling": {
                 "classicalPolicy": "FilterScore",
                 "quantumPolicy": "NSGA2",
-                "schedulingInterval": 120,
+                "schedulingInterval": 30,
                 "schedulingThreshold": 1,
             },
             "errorMitigation": {"enabled": False, "stackedTechniques": []},

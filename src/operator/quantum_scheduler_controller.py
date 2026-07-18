@@ -10,8 +10,8 @@ Implements the paper's three-stage quantum scheduling:
     3. Selection             — MCDM with pseudo-weights
 
 Triggers (from paper §7):
-    - Queue size >= scheduling_threshold (default 100)
-    - Time since last scheduling >= scheduling_interval (default 120 s)
+    - Queue size >= scheduling_threshold (default 10)
+    - Time since last scheduling >= scheduling_interval (default 30 s)
 """
 
 from __future__ import annotations
@@ -101,8 +101,8 @@ class QuantumSchedulerController:
     def __init__(
         self,
         mode: str = "local",
-        scheduling_interval: int = 120,
-        scheduling_threshold: int = 100,
+        scheduling_interval: int = 30,
+        scheduling_threshold: int = 10,
     ) -> None:
         self.mode = mode
         self.k8s = K8sClient(mode=mode)

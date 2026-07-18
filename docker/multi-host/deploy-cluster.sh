@@ -43,6 +43,10 @@
 #   SAVE_IMAGES_TAR         save all images to images.tar after building
 #   SKIP_FIREWALL           skip firewall port hints
 #   DRY_RUN                 print commands without executing
+#   OPERATOR_CPU_REQUEST    operator CPU request (default: 1)
+#   OPERATOR_MEMORY_REQUEST operator memory request (default: 1Gi)
+#   OPERATOR_CPU_LIMIT      operator CPU limit (default: 1)
+#   OPERATOR_MEMORY_LIMIT   operator memory limit (default: 1Gi)
 # ============================================================================
 
 set -euo pipefail
@@ -66,6 +70,10 @@ SAVE_IMAGES_TAR="${SAVE_IMAGES_TAR:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 IMAGES_TAR="${IMAGES_TAR:-${SCRIPT_DIR}/images.tar}"
 IMAGE_LIST_FILE="${PROJECT_ROOT}/image-list.txt"
+OPERATOR_CPU_REQUEST="${OPERATOR_CPU_REQUEST:-1}"
+OPERATOR_MEMORY_REQUEST="${OPERATOR_MEMORY_REQUEST:-1Gi}"
+OPERATOR_CPU_LIMIT="${OPERATOR_CPU_LIMIT:-1}"
+OPERATOR_MEMORY_LIMIT="${OPERATOR_MEMORY_LIMIT:-1Gi}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -397,6 +405,8 @@ check_remote_docker() {
     local version
     version="$(_remote "$host" "docker --version 2>/dev/null" || echo "")"
     [[ -n "$version" ]] || die "Docker not found on ${host}. Install Docker >= 20.10 first."
+    _remote "$host" "docker info >/dev/null 2>&1" || \
+        die "Docker daemon is not accessible for the SSH user on ${host}. Add the user to the docker group or configure passwordless Docker access before deploying."
     log "  ${host}: ${version}"
 }
 
@@ -585,6 +595,9 @@ distribute_images() {
     local -a images
     _load_image_list images
 
+    local dist_log_dir="${PROJECT_ROOT}/data/deploy_logs/image_distribute"
+    mkdir -p "$dist_log_dir"
+
     if [[ "$SKIP_IMAGE_DISTRIBUTE" == "1" ]]; then
         warn "SKIP_IMAGE_DISTRIBUTE=1 — verifying images are already present on every host."
         for host in "${hosts[@]}"; do
@@ -594,6 +607,10 @@ distribute_images() {
         return 0
     fi
 
+    local -a dist_pids=()
+    local -a dist_labels=()
+    local failures=0
+
     for host in "${hosts[@]}"; do
         if _is_local "$host"; then
             log "Verifying localhost ${host} already has required images …"
@@ -602,19 +619,34 @@ distribute_images() {
             continue
         fi
 
-        log "Distributing ${#images[@]} images to ${host} …"
+        log "Queueing distribution of ${#images[@]} images to ${host} …"
 
         # Stream images tar over SSH to avoid temp files on remote.
-        log "  Sending images via ssh pipe …"
-        if docker save "${images[@]}" 2>/dev/null | \
-           ssh -o ConnectTimeout=10 "$host" "docker load 2>/dev/null"; then
+        local host_log="${dist_log_dir}/${host}.log"
+        : >"$host_log"
+        (
+            echo "[INFO] $(date -Iseconds) sending ${#images[@]} image(s) to ${host}"
+            docker save "${images[@]}" 2>&1 | \
+                ssh -o ConnectTimeout=10 "$host" "docker load" 2>&1
+        ) >>"$host_log" 2>&1 &
+        dist_pids+=("$!")
+        dist_labels+=("$host")
+    done
+
+    for i in "${!dist_pids[@]}"; do
+        local pid="${dist_pids[$i]}"
+        local host="${dist_labels[$i]}"
+        local host_log="${dist_log_dir}/${host}.log"
+        if wait "$pid"; then
             log "  ✓ ${host} done"
         else
-            die "Failed to distribute images to ${host}"
+            warn "  ${host} distribution failed — see ${host_log}"
+            failures=$((failures + 1))
         fi
     done
 
-    log "  ✓ All hosts have images in Docker"
+    [[ "$failures" -eq 0 ]] || die "${failures} image distribution task(s) failed"
+    log "  ✓ All hosts have images in Docker (logs: ${dist_log_dir})"
 }
 
 # ==============================================================================
@@ -1108,91 +1140,15 @@ deploy_qonductor_controllers() {
         -l app=qonductor,component=qpu-profile \
         --ignore-not-found=true 2>/dev/null || true
 
-    # Compute operator resources from the k3s server container config:
-    # requests = half of server resources; limits = all server resources.
-    local server_cpus="${SERVER_CPUS:-2}"
-    local server_memory="${SERVER_MEMORY:-4g}"
-    local resource_assignments
-    resource_assignments="$(
-        python3 - "$server_cpus" "$server_memory" <<'PY'
-from decimal import Decimal, InvalidOperation
-import re
-import sys
-
-
-def parse_cpu(value: str) -> Decimal:
-    raw = str(value).strip()
-    if raw.endswith("m"):
-        return Decimal(raw[:-1]) / Decimal(1000)
-    return Decimal(raw)
-
-
-def render_cpu(value: Decimal) -> str:
-    if value == value.to_integral_value():
-        return str(int(value))
-    milli = (value * Decimal(1000)).to_integral_value()
-    return f"{int(milli)}m"
-
-
-def split_memory(value: str) -> tuple[Decimal, str]:
-    match = re.fullmatch(r"\s*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]*)\s*", str(value))
-    if not match:
-        raise ValueError(f"unsupported memory quantity: {value!r}")
-    number = Decimal(match.group(1))
-    unit = match.group(2) or "g"
-    return number, unit
-
-
-def k8s_memory_unit(unit: str) -> str:
-    normalized = unit.strip()
-    lower = normalized.lower()
-    if lower in ("g", "gb", "gi", "gib"):
-        return "Gi"
-    if lower in ("m", "mb", "mi", "mib"):
-        return "Mi"
-    if lower in ("k", "kb", "ki", "kib"):
-        return "Ki"
-    return normalized or "Gi"
-
-
-def render_memory(number: Decimal, unit: str) -> str:
-    unit = k8s_memory_unit(unit)
-    if number == number.to_integral_value():
-        return f"{int(number)}{unit}"
-
-    # Kubernetes accepts fixed-point quantities, but emitting Mi for fractional
-    # Gi keeps the generated manifest easy to read and avoids parser surprises.
-    if unit == "Gi":
-        mib = (number * Decimal(1024)).to_integral_value()
-        return f"{int(mib)}Mi"
-    if unit == "Mi":
-        kib = (number * Decimal(1024)).to_integral_value()
-        return f"{int(kib)}Ki"
-    return f"{number.normalize()}{unit}"
-
-
-try:
-    cpu = parse_cpu(sys.argv[1])
-    mem_num, mem_unit = split_memory(sys.argv[2])
-except (InvalidOperation, ValueError) as exc:
-    raise SystemExit(str(exc))
-
-print(f"op_cpu_req={render_cpu(cpu / Decimal(2))}")
-print(f"op_mem_req={render_memory(mem_num / Decimal(2), mem_unit)}")
-print(f"op_cpu_limit={render_cpu(cpu)}")
-print(f"op_mem_limit={render_memory(mem_num, mem_unit)}")
-PY
-    )" || die "Failed to compute operator resources from server.cpus=${server_cpus}, server.memory=${server_memory}"
-    eval "$resource_assignments"
-    log "  Operator resources: requests=${op_cpu_req} CPU/${op_mem_req}, limits=${op_cpu_limit} CPU/${op_mem_limit}"
+    log "  Operator resources: requests=${OPERATOR_CPU_REQUEST} CPU/${OPERATOR_MEMORY_REQUEST}, limits=${OPERATOR_CPU_LIMIT} CPU/${OPERATOR_MEMORY_LIMIT}"
 
     local rendered_operator
     rendered_operator="$(mktemp /tmp/qonductor-operator-deployment.XXXXXX.yaml)"
     sed -e "s|__QONDUCTOR_DATA_PATH__|${PROJECT_ROOT}/data|g" \
-        -e "s|__OPERATOR_CPU_REQUEST__|${op_cpu_req}|g" \
-        -e "s|__OPERATOR_MEMORY_REQUEST__|${op_mem_req}|g" \
-        -e "s|__OPERATOR_CPU_LIMIT__|${op_cpu_limit}|g" \
-        -e "s|__OPERATOR_MEMORY_LIMIT__|${op_mem_limit}|g" \
+        -e "s|__OPERATOR_CPU_REQUEST__|${OPERATOR_CPU_REQUEST}|g" \
+        -e "s|__OPERATOR_MEMORY_REQUEST__|${OPERATOR_MEMORY_REQUEST}|g" \
+        -e "s|__OPERATOR_CPU_LIMIT__|${OPERATOR_CPU_LIMIT}|g" \
+        -e "s|__OPERATOR_MEMORY_LIMIT__|${OPERATOR_MEMORY_LIMIT}|g" \
         "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"
 
     kubectl apply -f "${DEPLOY_DIR}/operator/rbac.yaml"
