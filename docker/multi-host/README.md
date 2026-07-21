@@ -154,12 +154,12 @@ These ports **must** be reachable between all cluster hosts.
 ## Image Distribution
 
 Unlike Kind (`kind load docker-image`), k3s uses its own embedded
-containerd. Images must be imported via `ctr images import`:
+containerd. Images must be imported into the `k8s.io` namespace:
 
 ```bash
 # On the server host:
 docker save qonductor-operator:latest | \
-  docker exec -i k3s-server ctr images import -
+  docker exec -i k3s-server ctr -n k8s.io images import -
 
 # After rebuilding images, re-sync them:
 bash docker/multi-host/sync-images.sh

@@ -15,7 +15,7 @@
 #   Phase 1: Teardown      — destroy existing containers/volumes/images
 #   Phase 2: Image Prepare — load from images.tar or build from Dockerfiles
 #   Phase 3: Distribute    — push images to Docker on every host
-#   Phase 4: Deploy k3s    — server → agents → wait for nodes
+#   Phase 4: Deploy k3s    — server → agents in parallel → wait for nodes
 #   Phase 5: Containerd    — import images into k3s embedded containerd
 #   Phase 6: Configure     — QPU profiles, labels, CRDs, controllers
 #   Phase 7: Summary       — print cluster info
@@ -47,6 +47,11 @@
 #   OPERATOR_MEMORY_REQUEST operator memory request (default: 1Gi)
 #   OPERATOR_CPU_LIMIT      operator CPU limit (default: 1)
 #   OPERATOR_MEMORY_LIMIT   operator memory limit (default: 1Gi)
+#   SCHEDULING_INTERVAL     quantum scheduler interval in seconds (default: 30)
+#   SCHEDULING_THRESHOLD    queue depth triggering scheduling (default: 10)
+#   TRANSPILATION_WORKERS   maximum parallel transpilation processes (default: 8)
+#   TRANSPILATION_CACHE_ENABLED enable transpilation cache: 0 or 1 (default: 1)
+#   TRANSPILATION_CACHE_SIZE maximum cached circuit/backend templates (default: 256)
 # ============================================================================
 
 set -euo pipefail
@@ -59,21 +64,26 @@ DEPLOY_DIR="${PROJECT_ROOT}/deploy"
 
 # ---- Flags -------------------------------------------------------------------
 SKIP_FIREWALL="${SKIP_FIREWALL:-1}"
-SKIP_TEARDOWN="${SKIP_TEARDOWN:-0}"
+SKIP_TEARDOWN="${SKIP_TEARDOWN:-1}"
 CLEANUP_VOLUMES="${CLEANUP_VOLUMES:-1}"
 CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
-SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
-SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-0}"
+SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-1}"
+SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-1}"
 SKIP_CONTAINERD_IMPORT="${SKIP_CONTAINERD_IMPORT:-0}"
 SKIP_CONTROLLERS="${SKIP_CONTROLLERS:-0}"
 SAVE_IMAGES_TAR="${SAVE_IMAGES_TAR:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 IMAGES_TAR="${IMAGES_TAR:-${SCRIPT_DIR}/images.tar}"
 IMAGE_LIST_FILE="${PROJECT_ROOT}/image-list.txt"
-OPERATOR_CPU_REQUEST="${OPERATOR_CPU_REQUEST:-1}"
-OPERATOR_MEMORY_REQUEST="${OPERATOR_MEMORY_REQUEST:-1Gi}"
-OPERATOR_CPU_LIMIT="${OPERATOR_CPU_LIMIT:-1}"
-OPERATOR_MEMORY_LIMIT="${OPERATOR_MEMORY_LIMIT:-1Gi}"
+OPERATOR_CPU_REQUEST="${OPERATOR_CPU_REQUEST:-3}"
+OPERATOR_MEMORY_REQUEST="${OPERATOR_MEMORY_REQUEST:-2Gi}"
+OPERATOR_CPU_LIMIT="${OPERATOR_CPU_LIMIT:-4}"
+OPERATOR_MEMORY_LIMIT="${OPERATOR_MEMORY_LIMIT:-4Gi}"
+SCHEDULING_INTERVAL="${SCHEDULING_INTERVAL:-10}"
+SCHEDULING_THRESHOLD="${SCHEDULING_THRESHOLD:-5}"
+TRANSPILATION_WORKERS="${TRANSPILATION_WORKERS:-8}"
+TRANSPILATION_CACHE_ENABLED="${TRANSPILATION_CACHE_ENABLED:-1}"
+TRANSPILATION_CACHE_SIZE="${TRANSPILATION_CACHE_SIZE:-256}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -350,6 +360,10 @@ validate_config() {
     log "Validating cluster configuration …"
     [[ -f "$CLUSTER_CONFIG" ]] || die "cluster-config.yaml not found at $CLUSTER_CONFIG"
     [[ -n "${SERVER_HOST:-}" && "${SERVER_HOST:-}" != "null" ]] || die "server.host is required"
+    [[ "$TRANSPILATION_CACHE_ENABLED" =~ ^[01]$ ]] || \
+        die "TRANSPILATION_CACHE_ENABLED must be 0 or 1"
+    [[ "$TRANSPILATION_CACHE_SIZE" =~ ^[1-9][0-9]*$ ]] || \
+        die "TRANSPILATION_CACHE_SIZE must be a positive integer"
 
     local qpu_count=0
     for ((i = 0; i < ${AGENTS_COUNT:-0}; i++)); do
@@ -793,55 +807,55 @@ fetch_kubeconfig() {
     log "  ✓ Kubeconfig written to ~/.kube/config"
 }
 
-deploy_agents() {
+deploy_agent() {
+    local i="$1"
     local k3s_version="${CLUSTER_KUBERNETESVERSION}"
     local k3s_token="${CLUSTER_K3STOKEN}"
     local server_host="${SERVER_HOST}"
 
-    for ((i = 0; i < AGENTS_COUNT; i++)); do
-        local host_var="AGENTS_${i}_HOST"
-        local host="${!host_var}"
-        local name_var="AGENTS_${i}_CONTAINERNAME"
-        local container_name="${!name_var}"
-        local node_var="AGENTS_${i}_NODENAME"
-        local node_name="${!node_var}"
-        local type_var="AGENTS_${i}_NODETYPE"
-        local node_type="${!type_var}"
-        local flannel_iface="${CLUSTER_FLANNELINTERFACE}"
-        local cpus_var="AGENTS_${i}_CPUS"
-        local cpus="${!cpus_var:-}"
-        local mem_var="AGENTS_${i}_MEMORY"
-        local memory="${!mem_var:-}"
+    local host_var="AGENTS_${i}_HOST"
+    local host="${!host_var}"
+    local name_var="AGENTS_${i}_CONTAINERNAME"
+    local container_name="${!name_var}"
+    local node_var="AGENTS_${i}_NODENAME"
+    local node_name="${!node_var}"
+    local type_var="AGENTS_${i}_NODETYPE"
+    local node_type="${!type_var}"
+    local flannel_iface="${CLUSTER_FLANNELINTERFACE}"
+    local cpus_var="AGENTS_${i}_CPUS"
+    local cpus="${!cpus_var:-}"
+    local mem_var="AGENTS_${i}_MEMORY"
+    local memory="${!mem_var:-}"
 
-        local cpu_flag="" mem_flag=""
-        [[ -n "$cpus" ]]   && cpu_flag="--cpus ${cpus}"
-        [[ -n "$memory" ]] && mem_flag="--memory ${memory}"
+    local cpu_flag="" mem_flag=""
+    [[ -n "$cpus" ]]   && cpu_flag="--cpus ${cpus}"
+    [[ -n "$memory" ]] && mem_flag="--memory ${memory}"
 
-        if [[ "$flannel_iface" == "auto" ]]; then
-            flannel_iface="$(detect_iface "$host")"
-            log "Auto-detected Flannel interface on ${host}: ${flannel_iface}"
+    if [[ "$flannel_iface" == "auto" ]]; then
+        flannel_iface="$(detect_iface "$host")"
+        log "Auto-detected Flannel interface on ${host}: ${flannel_iface}"
+    fi
+
+    # Safety check — container should have been removed in teardown.
+    if _remote "$host" "docker ps -a --format '{{.Names}}' | grep -qx '${container_name}'" 2>/dev/null; then
+        if _remote "$host" "docker ps --format '{{.Names}}' | grep -qx '${container_name}'" 2>/dev/null; then
+            warn "Container '${container_name}' is already running — reusing."
+            return 0
+        else
+            warn "Container '${container_name}' exists but stopped — removing."
+            _run "$host" "docker rm -f ${container_name}"
         fi
+    fi
 
-        # Safety check — container should have been removed in teardown.
-        if _remote "$host" "docker ps -a --format '{{.Names}}' | grep -qx '${container_name}'" 2>/dev/null; then
-            if _remote "$host" "docker ps --format '{{.Names}}' | grep -qx '${container_name}'" 2>/dev/null; then
-                warn "Container '${container_name}' is already running — reusing."
-                continue
-            else
-                warn "Container '${container_name}' exists but stopped — removing."
-                _run "$host" "docker rm -f ${container_name}"
-            fi
-        fi
+    log "Deploying k3s agent on ${host} …"
+    log "  Container: ${container_name}  |  Node: ${node_name}  |  Type: ${node_type}"
+    log "  Flannel iface: ${flannel_iface}"
+    [[ -n "$cpus" ]] && log "  CPUs: ${cpus}" ; [[ -n "$memory" ]] && log "  Memory: ${memory}"
 
-        log "Deploying k3s agent on ${host} …"
-        log "  Container: ${container_name}  |  Node: ${node_name}  |  Type: ${node_type}"
-        log "  Flannel iface: ${flannel_iface}"
-        [[ -n "$cpus" ]] && log "  CPUs: ${cpus}" ; [[ -n "$memory" ]] && log "  Memory: ${memory}"
+    _run "$host" "docker volume create ${container_name}-data 2>/dev/null || true"
+    _run "$host" "sudo mkdir -p /etc/qonductor/qpus"
 
-        _run "$host" "docker volume create ${container_name}-data 2>/dev/null || true"
-        _run "$host" "sudo mkdir -p /etc/qonductor/qpus"
-
-        _run "$host" "docker run -d \
+    _run "$host" "docker run -d \
             --name '${container_name}' \
             --network host \
             --privileged \
@@ -860,39 +874,81 @@ deploy_agents() {
                 --node-label='qonductor.io/node-type=${node_type}' \
         "
 
-        log "  ✓ Agent container started (${container_name})"
+    log "  ✓ Agent container started (${container_name})"
+}
+
+deploy_agents() {
+    local -a agent_pids=()
+    local i pid
+    local failures=0
+
+    log "Deploying ${AGENTS_COUNT} k3s agent(s) in parallel …"
+    for ((i = 0; i < AGENTS_COUNT; i++)); do
+        deploy_agent "$i" &
+        agent_pids+=("$!")
     done
+
+    for pid in "${agent_pids[@]}"; do
+        if ! wait "$pid"; then
+            failures=$((failures + 1))
+        fi
+    done
+
+    [[ "$failures" -eq 0 ]] || die "${failures} k3s agent deployment(s) failed"
+    log "  ✓ All agent containers started"
+}
+
+wait_for_node() {
+    local node_name="$1"
+    local waited=0
+    local delay=3
+
+    while ! kubectl get node "$node_name" >/dev/null 2>&1; do
+        if [[ "$waited" -ge 300 ]]; then
+            warn "Node ${node_name} did not join the cluster."
+            return 1
+        fi
+        sleep "$delay"
+        waited=$((waited + delay))
+    done
+
+    if ! kubectl wait --for=condition=Ready "node/${node_name}" --timeout=300s 2>/dev/null; then
+        warn "Node ${node_name} did not become Ready."
+        return 1
+    fi
+
+    log "  ✓ Node ${node_name} is Ready"
 }
 
 wait_for_nodes() {
-    log "Waiting for all nodes to become Ready …"
+    log "Waiting for all nodes to become Ready in parallel …"
 
     local -a expected_nodes=("${SERVER_NODENAME}")
+    local -a wait_pids=()
+    local failures=0
+    local i node_name pid
+
     for ((i = 0; i < AGENTS_COUNT; i++)); do
         local node_var="AGENTS_${i}_NODENAME"
         expected_nodes+=("${!node_var}")
     done
 
     for node_name in "${expected_nodes[@]}"; do
-        local waited=0
-        local delay=3
-
-        while ! kubectl get node "$node_name" >/dev/null 2>&1; do
-            if [[ "$waited" -ge 300 ]]; then
-                warn "Node ${node_name} did not join the cluster — showing current status:"
-                kubectl get nodes -o wide
-                die "All configured nodes must join before proceeding. Check node status above."
-            fi
-            sleep "$delay"
-            waited=$((waited + delay))
-        done
-
-        kubectl wait --for=condition=Ready "node/${node_name}" --timeout=300s 2>/dev/null || {
-            warn "Node ${node_name} did not become Ready — showing current status:"
-            kubectl get nodes -o wide
-            die "All configured nodes must join and become Ready before proceeding. Check node status above."
-        }
+        wait_for_node "$node_name" &
+        wait_pids+=("$!")
     done
+
+    for pid in "${wait_pids[@]}"; do
+        if ! wait "$pid"; then
+            failures=$((failures + 1))
+        fi
+    done
+
+    if [[ "$failures" -gt 0 ]]; then
+        warn "${failures} configured node(s) failed to become Ready — showing current status:"
+        kubectl get nodes -o wide
+        die "All configured nodes must join and become Ready before proceeding."
+    fi
 
     log "  ✓ Nodes:"
     kubectl get nodes -o wide
@@ -959,7 +1015,7 @@ import_containerd() {
                     # Import each image individually so a failure on one does not
                     # break the rest.  Capture stderr into the per-host log.
                     if _remote "$host" \
-                        "docker save '${img}' 2>&1 | docker exec -i '${container}' ctr images import - 2>&1" \
+                        "docker save '${img}' 2>&1 | docker exec -i '${container}' ctr -n k8s.io images import - 2>&1" \
                         >>"$host_log" 2>&1; then
                         import_ok=$((import_ok + 1))
                     else
@@ -968,18 +1024,33 @@ import_containerd() {
                     fi
                 done
 
-                # Post-import verification: check each image exists in containerd.
+                # containerd metadata can become visible shortly after import
+                # returns. Retry verification to avoid a transient false failure.
                 local verify_missing=0
-                local ctr_img_list
-                ctr_img_list="$(_remote "$host" "docker exec '${container}' ctr images ls -q 2>&1" 2>>"$host_log" || true)"
-                for img in "${images[@]}"; do
-                    # Match without the tag for flexible comparison (ctr list outputs
-                    # full references like docker.io/library/<name>:<tag>).
-                    if ! echo "$ctr_img_list" | grep -qF "${img}"; then
-                        verify_missing=$((verify_missing + 1))
-                        echo "[MISSING] $(date -Iseconds) ${host}:${container} — ${img} not found after import" >>"$host_log"
-                    fi
+                local ctr_img_list=""
+                local verify_attempt
+                for ((verify_attempt = 1; verify_attempt <= 5; verify_attempt++)); do
+                    verify_missing=0
+                    ctr_img_list="$(_remote "$host" "docker exec '${container}' ctr -n k8s.io images ls -q 2>&1" 2>>"$host_log" || true)"
+                    for img in "${images[@]}"; do
+                        # ctr reports fully-qualified references such as
+                        # docker.io/library/<name>:<tag>; substring matching
+                        # accepts both qualified and source image names.
+                        if ! grep -qF "${img}" <<<"$ctr_img_list"; then
+                            verify_missing=$((verify_missing + 1))
+                        fi
+                    done
+                    [[ "$verify_missing" -eq 0 ]] && break
+                    [[ "$verify_attempt" -lt 5 ]] && sleep 2
                 done
+
+                if [[ "$verify_missing" -gt 0 ]]; then
+                    for img in "${images[@]}"; do
+                        if ! grep -qF "${img}" <<<"$ctr_img_list"; then
+                            echo "[MISSING] $(date -Iseconds) ${host}:${container} — ${img} not found after ${verify_attempt} verification attempts" >>"$host_log"
+                        fi
+                    done
+                fi
 
                 if [[ "$import_fail" -gt 0 || "$verify_missing" -gt 0 ]]; then
                     echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — ok=${import_ok} fail=${import_fail} missing=${verify_missing}" >>"$host_log"
@@ -999,7 +1070,8 @@ import_containerd() {
         if wait "$pid"; then
             log "  ✓ ${label} done"
         else
-            warn "  ${label} import failed — see ${import_log_dir}/${label}.log"
+            local log_label="${label/:/_}"
+            warn "  ${label} import failed — see ${import_log_dir}/${log_label}.log"
             failures=$((failures + 1))
         fi
     done
@@ -1135,12 +1207,57 @@ deploy_qonductor_controllers() {
         return 0
     fi
 
-    log "Deploying Qonductor operator and device plugin …"
+    log "Deploying Qonductor device plugin before operator …"
+    kubectl apply -f "${DEPLOY_DIR}/operator/rbac.yaml"
+    local rendered_config
+    local transpilation_cache_enabled_yaml="false"
+    [[ "$TRANSPILATION_CACHE_ENABLED" == "1" ]] && \
+        transpilation_cache_enabled_yaml="true"
+    rendered_config="$(mktemp /tmp/qonductor-operator-config.XXXXXX.yaml)"
+    sed -e "s|__SCHEDULING_INTERVAL__|${SCHEDULING_INTERVAL}|g" \
+        -e "s|__SCHEDULING_THRESHOLD__|${SCHEDULING_THRESHOLD}|g" \
+        -e "s|__TRANSPILATION_WORKERS__|${TRANSPILATION_WORKERS}|g" \
+        -e "s|__TRANSPILATION_CACHE_ENABLED__|${transpilation_cache_enabled_yaml}|g" \
+        -e "s|__TRANSPILATION_CACHE_SIZE__|${TRANSPILATION_CACHE_SIZE}|g" \
+        "${DEPLOY_DIR}/operator/configmap.yaml" > "$rendered_config"
+    kubectl apply -f "$rendered_config"
+    rm -f "$rendered_config"
+    kubectl delete deployment/qonductor-operator daemonset/qonductor-qpu-device-plugin \
+        -n default --ignore-not-found=true --wait=true 2>/dev/null || true
     kubectl delete configmap -n default \
         -l app=qonductor,component=qpu-profile \
         --ignore-not-found=true 2>/dev/null || true
 
+    kubectl apply -f "${DEPLOY_DIR}/device-plugin/daemonset.yaml"
+
+    log "Waiting for QPU device-plugin rollout …"
+    kubectl rollout status daemonset/qonductor-qpu-device-plugin \
+        -n default --timeout=300s || die "Device-plugin rollout failed — check 'kubectl describe daemonset qonductor-qpu-device-plugin'"
+
+    local expected_profiles=0
+    for ((i = 0; i < AGENTS_COUNT; i++)); do
+        local qpu_count_var="AGENTS_${i}_QPUS_COUNT"
+        expected_profiles=$((expected_profiles + ${!qpu_count_var:-0}))
+    done
+
+    if [[ "$expected_profiles" -gt 0 ]]; then
+        log "Waiting for ${expected_profiles} QPU profile ConfigMap(s) …"
+        local waited=0 profile_count=0
+        while [[ "$waited" -lt 120 ]]; do
+            profile_count="$(kubectl get configmap -n default \
+                -l app=qonductor,component=qpu-profile -o name 2>/dev/null | wc -l)"
+            profile_count="${profile_count//[[:space:]]/}"
+            [[ "$profile_count" -ge "$expected_profiles" ]] && break
+            sleep 2
+            waited=$((waited + 2))
+        done
+        [[ "$profile_count" -ge "$expected_profiles" ]] || \
+            die "Only ${profile_count}/${expected_profiles} QPU profile ConfigMaps were created"
+        log "  ✓ ${profile_count} QPU profile ConfigMap(s) ready"
+    fi
+
     log "  Operator resources: requests=${OPERATOR_CPU_REQUEST} CPU/${OPERATOR_MEMORY_REQUEST}, limits=${OPERATOR_CPU_LIMIT} CPU/${OPERATOR_MEMORY_LIMIT}"
+    log "  Quantum scheduler: interval=${SCHEDULING_INTERVAL}s, threshold=${SCHEDULING_THRESHOLD}, transpilation workers=${TRANSPILATION_WORKERS}, cache=${TRANSPILATION_CACHE_ENABLED}, cache size=${TRANSPILATION_CACHE_SIZE}"
 
     local rendered_operator
     rendered_operator="$(mktemp /tmp/qonductor-operator-deployment.XXXXXX.yaml)"
@@ -1149,21 +1266,19 @@ deploy_qonductor_controllers() {
         -e "s|__OPERATOR_MEMORY_REQUEST__|${OPERATOR_MEMORY_REQUEST}|g" \
         -e "s|__OPERATOR_CPU_LIMIT__|${OPERATOR_CPU_LIMIT}|g" \
         -e "s|__OPERATOR_MEMORY_LIMIT__|${OPERATOR_MEMORY_LIMIT}|g" \
+        -e "s|__SCHEDULING_INTERVAL__|${SCHEDULING_INTERVAL}|g" \
+        -e "s|__SCHEDULING_THRESHOLD__|${SCHEDULING_THRESHOLD}|g" \
+        -e "s|__TRANSPILATION_WORKERS__|${TRANSPILATION_WORKERS}|g" \
+        -e "s|__TRANSPILATION_CACHE_ENABLED__|${TRANSPILATION_CACHE_ENABLED}|g" \
+        -e "s|__TRANSPILATION_CACHE_SIZE__|${TRANSPILATION_CACHE_SIZE}|g" \
         "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"
 
-    kubectl apply -f "${DEPLOY_DIR}/operator/rbac.yaml"
-    kubectl apply -f "${DEPLOY_DIR}/operator/configmap.yaml"
     kubectl apply -f "$rendered_operator"
     rm -f "$rendered_operator"
-    kubectl apply -f "${DEPLOY_DIR}/device-plugin/daemonset.yaml"
 
     log "Waiting for Qonductor operator rollout …"
     kubectl rollout status deployment/qonductor-operator \
         -n default --timeout=180s || die "Operator rollout failed — check 'kubectl describe deployment qonductor-operator'"
-
-    log "Waiting for QPU device-plugin rollout …"
-    kubectl rollout status daemonset/qonductor-qpu-device-plugin \
-        -n default --timeout=300s || die "Device-plugin rollout failed — check 'kubectl describe daemonset qonductor-qpu-device-plugin'"
 
     log "  ✓ Qonductor controllers deployed"
 }

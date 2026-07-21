@@ -261,7 +261,7 @@ if [[ "$SKIP_K3S_LOAD" != "1" && -n "$K3S_CONTAINER_NAME" ]]; then
         # Normalize image name (strip docker.io/ prefix).
         img="${img#docker.io/}"
         echo -n "  [import] $img … "
-        if docker save "$img" 2>/dev/null | docker exec -i "$K3S_CONTAINER_NAME" ctr images import - >/dev/null 2>&1; then
+        if docker save "$img" 2>/dev/null | docker exec -i "$K3S_CONTAINER_NAME" ctr -n k8s.io images import - >/dev/null 2>&1; then
             echo "✓"
         else
             warn "✗ Failed (may already exist or be a non-image layer)"
@@ -275,7 +275,7 @@ fi
 echo ""
 log "Image loading complete."
 echo ""
-echo "  Verify: docker exec ${K3S_CONTAINER_NAME} ctr images list"
+echo "  Verify: docker exec ${K3S_CONTAINER_NAME} ctr -n k8s.io images list"
 LOAD_HEADER
 
     chmod +x "$load_script"
