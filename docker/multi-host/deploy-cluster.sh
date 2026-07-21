@@ -64,11 +64,11 @@ DEPLOY_DIR="${PROJECT_ROOT}/deploy"
 
 # ---- Flags -------------------------------------------------------------------
 SKIP_FIREWALL="${SKIP_FIREWALL:-1}"
-SKIP_TEARDOWN="${SKIP_TEARDOWN:-1}"
+SKIP_TEARDOWN="${SKIP_TEARDOWN:-0}"
 CLEANUP_VOLUMES="${CLEANUP_VOLUMES:-1}"
 CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
-SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-1}"
-SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-1}"
+SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
+SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-0}"
 SKIP_CONTAINERD_IMPORT="${SKIP_CONTAINERD_IMPORT:-0}"
 SKIP_CONTROLLERS="${SKIP_CONTROLLERS:-0}"
 SAVE_IMAGES_TAR="${SAVE_IMAGES_TAR:-0}"
@@ -640,8 +640,8 @@ distribute_images() {
         : >"$host_log"
         (
             echo "[INFO] $(date -Iseconds) sending ${#images[@]} image(s) to ${host}"
-            docker save "${images[@]}" 2>&1 | \
-                ssh -o ConnectTimeout=10 "$host" "docker load" 2>&1
+            docker save "${images[@]}" 2>>"$host_log" | \
+                ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "$host" "docker load" 2>&1
         ) >>"$host_log" 2>&1 &
         dist_pids+=("$!")
         dist_labels+=("$host")

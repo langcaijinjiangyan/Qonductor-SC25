@@ -1,0 +1,624 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-050-pure-quantum-quantum-walk-no-ancilla-4-20260720174330-8
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: quantum-walk-no-ancilla
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 876a0f7e6b15
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: qwalk-noancilla_indep_qiskit_4
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/quantum_walk_no_ancilla/qwalk-noancilla_indep_qiskit_4.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-19
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[3] node;
+
+        qubit[1] coin;
+
+        bit[4] meas;
+
+        rz(pi/2) node[0];
+
+        sx node[0];
+
+        rz(5*pi/8) node[0];
+
+        rz(pi/8) node[1];
+
+        rz(pi/8) node[2];
+
+        rz(pi/2) coin[0];
+
+        sx coin[0];
+
+        rz(7*pi/8) coin[0];
+
+        cx coin[0],node[1];
+
+        rz(-pi/8) node[1];
+
+        cx coin[0],node[1];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        rz(pi/8) node[2];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        rz(pi/2) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx coin[0],node[1];
+
+        rz(pi/4) node[1];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        rz(pi/4) node[2];
+
+        cx coin[0],node[1];
+
+        rz(-pi/4) node[1];
+
+        sx node[1];
+
+        rz(5*pi/8) node[1];
+
+        cx coin[0],node[2];
+
+        x node[2];
+
+        rz(3*pi/8) node[2];
+
+        x coin[0];
+
+        rz(7*pi/8) coin[0];
+
+        cx coin[0],node[1];
+
+        rz(-pi/8) node[1];
+
+        cx coin[0],node[1];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        rz(pi/8) node[2];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        rz(pi/2) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx coin[0],node[1];
+
+        rz(pi/4) node[1];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        rz(pi/4) node[2];
+
+        cx coin[0],node[1];
+
+        rz(-pi/4) node[1];
+
+        sx node[1];
+
+        rz(5*pi/8) node[1];
+
+        cx coin[0],node[2];
+
+        x node[2];
+
+        rz(3*pi/8) node[2];
+
+        sx coin[0];
+
+        rz(-pi/8) coin[0];
+
+        cx coin[0],node[1];
+
+        rz(-pi/8) node[1];
+
+        cx coin[0],node[1];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        rz(pi/8) node[2];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        rz(pi/2) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx coin[0],node[1];
+
+        rz(pi/4) node[1];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        rz(pi/4) node[2];
+
+        cx coin[0],node[1];
+
+        rz(-pi/4) node[1];
+
+        sx node[1];
+
+        rz(5*pi/8) node[1];
+
+        cx coin[0],node[2];
+
+        x node[2];
+
+        rz(3*pi/8) node[2];
+
+        x coin[0];
+
+        rz(7*pi/8) coin[0];
+
+        cx coin[0],node[1];
+
+        rz(-pi/8) node[1];
+
+        cx coin[0],node[1];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        rz(pi/8) node[2];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        rz(pi/2) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx coin[0],node[1];
+
+        rz(pi/4) node[1];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        rz(pi/4) node[2];
+
+        cx coin[0],node[1];
+
+        rz(-pi/4) node[1];
+
+        sx node[1];
+
+        rz(5*pi/8) node[1];
+
+        cx coin[0],node[2];
+
+        x node[2];
+
+        rz(3*pi/8) node[2];
+
+        sx coin[0];
+
+        rz(-pi/8) coin[0];
+
+        cx coin[0],node[1];
+
+        rz(-pi/8) node[1];
+
+        cx coin[0],node[1];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        rz(pi/8) node[2];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        rz(pi/2) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx coin[0],node[1];
+
+        rz(pi/4) node[1];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        rz(pi/4) node[2];
+
+        cx coin[0],node[1];
+
+        rz(-pi/4) node[1];
+
+        sx node[1];
+
+        rz(5*pi/8) node[1];
+
+        cx coin[0],node[2];
+
+        x node[2];
+
+        rz(3*pi/8) node[2];
+
+        x coin[0];
+
+        rz(3*pi/8) coin[0];
+
+        cx coin[0],node[1];
+
+        rz(-pi/8) node[1];
+
+        cx coin[0],node[1];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        rz(pi/8) node[2];
+
+        cx node[1],node[2];
+
+        rz(-pi/8) node[2];
+
+        cx coin[0],node[2];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx coin[0],node[0];
+
+        rz(pi/8) node[0];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[1],node[0];
+
+        rz(pi/8) node[0];
+
+        rz(pi/2) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx node[2],node[0];
+
+        rz(-pi/8) node[0];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        cx coin[0],node[0];
+
+        rz(pi/2) node[0];
+
+        sx node[0];
+
+        rz(pi/2) node[0];
+
+        cx coin[0],node[1];
+
+        rz(pi/4) node[1];
+
+        cx node[2],node[1];
+
+        rz(-pi/4) node[1];
+
+        rz(pi/4) node[2];
+
+        cx coin[0],node[1];
+
+        rz(-pi/4) node[1];
+
+        sx node[1];
+
+        rz(pi/2) node[1];
+
+        cx coin[0],node[2];
+
+        rz(-pi/4) node[2];
+
+        x node[2];
+
+        x coin[0];
+
+        barrier node[0],node[1],node[2],coin[0];
+
+        meas[0] = measure node[0];
+
+        meas[1] = measure node[1];
+
+        meas[2] = measure node[2];
+
+        meas[3] = measure coin[0];
+
+        '
+      circuitFormat: qasm3
+      qubits: 4
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/quantum_walk_no_ancilla/spec_4.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/quantum_walk_no_ancilla
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/quantum_walk_no_ancilla/spec_4.json

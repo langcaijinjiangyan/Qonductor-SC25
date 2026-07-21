@@ -2,7 +2,7 @@
   "version": 2,
   "qnode": "4",
   "circuits": {
-    "qwalk-noancilla_indep_qiskit_4": "qwalk-noancilla_indep_qiskit_4.qasm"
+    "qwalk-noancilla_indep_qiskit_4": "qwalk-noancilla_indep_qiskit_4.qasm3"
   },
   "hybrid_job": false
 }

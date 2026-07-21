@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: two-local-ansatz-with-random-parameters-spec-6-dynamic
+  name: cov-067-hybrid-6q-two-local-ansatz-with-random-parameters-6-202
   namespace: default
   labels:
     app: qonductor
     algorithm: vqe-two-local
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 1f286af310be
+  workflowImageRef: d021a1ea53ef
   priority: balanced
   maxRetries: 3
   containers:
@@ -21,7 +21,7 @@ spec:
   scheduling:
     classicalPolicy: FilterScore
     quantumPolicy: NSGA2
-    schedulingInterval: 120
+    schedulingInterval: 30
     schedulingThreshold: 1
   errorMitigation:
     enabled: false
@@ -91,6 +91,7 @@ spec:
       clbits: 6
       shots: 16
       maxIterations: 1
+      quantumTimeoutSeconds: 21600.0
       priority: balanced
       seed: 12345
       source:

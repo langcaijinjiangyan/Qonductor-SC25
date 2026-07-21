@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: real-amplitudes-ansatz-with-random-parameters-spec-6-dynamic
+  name: cov-066-hybrid-6q-real-amplitudes-ansatz-with-random-parameters
   namespace: default
   labels:
     app: qonductor
     algorithm: vqe-real-amp
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: e2748cf6cdec
+  workflowImageRef: 744a102adfa0
   priority: balanced
   maxRetries: 3
   containers:
@@ -21,7 +21,7 @@ spec:
   scheduling:
     classicalPolicy: FilterScore
     quantumPolicy: NSGA2
-    schedulingInterval: 120
+    schedulingInterval: 30
     schedulingThreshold: 1
   errorMitigation:
     enabled: false
@@ -85,6 +85,7 @@ spec:
       clbits: 6
       shots: 16
       maxIterations: 1
+      quantumTimeoutSeconds: 21600.0
       priority: balanced
       seed: 12345
       source:

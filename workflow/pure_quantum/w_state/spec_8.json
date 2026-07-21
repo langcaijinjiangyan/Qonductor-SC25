@@ -2,7 +2,7 @@
   "version": 2,
   "qnode": "8",
   "circuits": {
-    "wstate_indep_qiskit_8": "wstate_indep_qiskit_8.qasm"
+    "wstate_indep_qiskit_8": "wstate_indep_qiskit_8.qasm3"
   },
   "hybrid_job": false
 }

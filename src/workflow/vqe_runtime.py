@@ -17,6 +17,7 @@ from typing import Any
 from src.operator.k8s_client import K8sClient
 from src.utils.logging_config import configure_logging
 from src.workflow.qaoa_runtime import (
+    DEFAULT_QUANTUM_TIMEOUT_SECONDS,
     initialize_parameters,
     submit_quantum_eval,
     wait_for_quantum_result,
@@ -123,7 +124,7 @@ def run_vqe_spsa_driver(
     shots = int(cfg.get("shots", 1024))
     max_iterations = int(os.environ.get("R1_ITERATIONS", cfg.get("maxIterations", 200)))
     priority = cfg.get("priority", "balanced")
-    timeout_s = float(cfg.get("quantumTimeoutSeconds", 900.0))
+    timeout_s = float(cfg.get("quantumTimeoutSeconds", DEFAULT_QUANTUM_TIMEOUT_SECONDS))
     poll_s = float(cfg.get("pollSeconds", 2.0))
     hamiltonian = cfg.get("hamiltonian", {})
     h_field = hamiltonian.get("hField", list(DEFAULT_H_FIELD))

@@ -9,28 +9,27 @@ metadata:
   labels:
     app: qonductor
 data:
-  # Quantum scheduler settings (paper §7)
-  scheduling-interval: "30"      # seconds between forced scheduling cycles
-  scheduling-threshold: "10"     # queue depth triggering immediate scheduling
+  config.yaml: |
+    # Quantum scheduler settings (paper section 7)
+    scheduling-interval: __SCHEDULING_INTERVAL__
+    scheduling-threshold: __SCHEDULING_THRESHOLD__
 
-  # MCDM preference weights (paper §7 Selection)
-  # fidelity: p=(1.0, 0.0); jct: p=(0.0, 1.0); balanced: p=(0.5, 0.5)
-  default-priority: "balanced"
+    # MCDM preference weights: fidelity, jct, or balanced.
+    default-priority: balanced
 
-  # Transpilation settings
-  transpilation-level: "pre-transpiled"  # QPU | processor-type | pre-transpiled
-  transpilation-count: "10"              # attempts per circuit
+    # Transpilation settings
+    transpilation-level: pre-transpiled
+    transpilation-count: 10
+    transpilation-workers: __TRANSPILATION_WORKERS__
+    transpilation-cache-enabled: __TRANSPILATION_CACHE_ENABLED__
+    transpilation-cache-size: __TRANSPILATION_CACHE_SIZE__
 
-  # Resource Estimator settings (paper §6)
-  resource-plans-count: "3"       # default number of resource plans generated
+    # Resource Estimator settings (paper section 6)
+    resource-plans-count: 3
 
-  # Fault tolerance (§4.1)
-  replicas: "3"                   # 2f+1 with f=1
-  raft-heartbeat-delta: "2s"     # Δ for heartbeat timeout
+    # Fault tolerance (paper section 4.1)
+    replicas: 3
+    raft-heartbeat-delta: 2s
 
-  # Workflow Registry root
-  registry-root: "/data/workflow-registry"
-
-  # IBM Quantum credentials (optional)
-  # ibm-token: ""
-  # ibm-instance: ""
+    # Workflow Registry root
+    registry-root: /data/workflow_registry

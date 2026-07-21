@@ -15,6 +15,7 @@ dict-based store mirrors the API semantics.
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 import re
@@ -39,6 +40,16 @@ HYBRID_WORKFLOW_PLURAL = "hybridworkflows"
 QUANTUM_JOB_PLURAL = "quantumjobs"
 QONDUCTOR_NODE_TYPE_LABEL = "qonductor.io/node-type"
 QONDUCTOR_MEMORY_LIMIT_LABEL = "qonductor.io/memory-limit"
+JOB_TTL_SECONDS = max(0, int(os.environ.get("QONDUCTOR_JOB_TTL_SECONDS", "3600")))
+QUANTUM_PAYLOAD_CONFIGMAP_MAX_BYTES = max(
+    1,
+    int(os.environ.get(
+        "QONDUCTOR_QUANTUM_PAYLOAD_CONFIGMAP_MAX_BYTES",
+        str(900 * 1024),
+    )),
+)
+QUANTUM_PAYLOAD_FILE_NAME = "payload.json"
+QUANTUM_PAYLOAD_MOUNT_PATH = "/etc/qonductor/payload"
 
 _MEMORY_UNITS = {
     "Ki": 1024,
@@ -229,21 +240,27 @@ class _LocalStore:
         import threading
         import queue as qmod
         q: qmod.Queue = qmod.Queue()
-        self.watch_handlers.setdefault(kind, []).append(
-            lambda event: q.put(event)
-        )
+        handler = lambda event: q.put(event)
+        self.watch_handlers.setdefault(kind, []).append(handler)
         # Yield existing resources first.
         for name in self._index.get(kind, []):
             obj = self.get(kind, name)
             if obj:
                 q.put({"type": "ADDED", "object": obj})
         # Then yield new events.
-        while True:
-            try:
-                event = q.get(timeout=30)
-                yield event
-            except qmod.Empty:
-                yield {"type": "HEARTBEAT", "object": {}}
+        try:
+            while True:
+                try:
+                    event = q.get(timeout=30)
+                    yield event
+                except qmod.Empty:
+                    yield {"type": "HEARTBEAT", "object": {}}
+        finally:
+            handlers = self.watch_handlers.get(kind, [])
+            if handler in handlers:
+                handlers.remove(handler)
+            if not handlers:
+                self.watch_handlers.pop(kind, None)
 
     def _notify(self, kind: str, event_type: str, obj: dict) -> None:
         for handler in self.watch_handlers.get(kind, []):
@@ -598,6 +615,7 @@ class K8sClient:
             backoff_seconds = 1.0
 
             while True:
+                w = None
                 try:
                     listed = self._custom_api.list_namespaced_custom_object(
                         group=HYBRID_WORKFLOW_GROUP,
@@ -649,6 +667,13 @@ class K8sClient:
                     )
                     time.sleep(backoff_seconds)
                     backoff_seconds = min(backoff_seconds * 2, 30.0)
+                finally:
+                    if w is not None:
+                        try:
+                            w.stop()
+                        except Exception:
+                            logger.debug("Failed to stop %s watch", plural,
+                                         exc_info=True)
         yield from self._store.watch(kind)
 
     # -- Node operations --------------------------------------------------
@@ -823,25 +848,119 @@ class K8sClient:
                     label_selector=label_selector or None,
                 ),
             )
-            return [
-                {
-                    "metadata": {
-                        "name": j.metadata.name,
-                        "labels": j.metadata.labels or {},
-                        "creationTimestamp": str(j.metadata.creation_timestamp),
-                    },
-                    "spec": {
-                        "suspend": getattr(j.spec, "suspend", False),
-                    },
-                    "status": {
-                        "active": getattr(j.status, "active", None),
-                        "succeeded": getattr(j.status, "succeeded", None),
-                        "failed": getattr(j.status, "failed", None),
-                    },
-                }
-                for j in result.items
-            ]
+            return [self._job_to_dict(job) for job in result.items]
         return self._store.list_jobs(label_selector)
+
+    @staticmethod
+    def _job_to_dict(job) -> dict:
+        """Convert a Kubernetes Job model to the controller's dict shape."""
+        return {
+            "metadata": {
+                "name": job.metadata.name,
+                "labels": job.metadata.labels or {},
+                "creationTimestamp": str(job.metadata.creation_timestamp),
+            },
+            "spec": {
+                "suspend": getattr(job.spec, "suspend", False),
+            },
+            "status": {
+                "active": getattr(job.status, "active", None),
+                "succeeded": getattr(job.status, "succeeded", None),
+                "failed": getattr(job.status, "failed", None),
+            },
+        }
+
+    def watch_jobs(
+        self,
+        label_selector: str = "",
+        namespace: str = "default",
+    ) -> Iterator[dict]:
+        """Watch Job changes through one reconnecting event stream."""
+        if self.mode != "k8s" or not self._batch_api:
+            for event in self._store.watch("jobs"):
+                if event.get("type") == "HEARTBEAT":
+                    yield event
+                    continue
+                labels = (
+                    event.get("object", {})
+                    .get("metadata", {})
+                    .get("labels", {})
+                )
+                if not label_selector or all(
+                    labels.get(key) == value
+                    for key, value in (
+                        item.split("=", 1)
+                        for item in label_selector.split(",")
+                        if "=" in item
+                    )
+                ):
+                    yield event
+            return
+
+        resource_version = ""
+        backoff_seconds = 1.0
+        while True:
+            job_watch = None
+            try:
+                listed = self._batch_api.list_namespaced_job(
+                    namespace=namespace,
+                    label_selector=label_selector or None,
+                    resource_version=resource_version or None,
+                )
+                resource_version = (
+                    getattr(listed.metadata, "resource_version", "") or ""
+                )
+                for job in listed.items:
+                    yield {"type": "ADDED", "object": self._job_to_dict(job)}
+
+                job_watch = watch.Watch()
+                for event in job_watch.stream(
+                    self._batch_api.list_namespaced_job,
+                    namespace=namespace,
+                    label_selector=label_selector or None,
+                    resource_version=resource_version or None,
+                    timeout_seconds=300,
+                ):
+                    job = event.get("object")
+                    if job is None:
+                        continue
+                    resource_version = (
+                        getattr(job.metadata, "resource_version", "")
+                        or resource_version
+                    )
+                    backoff_seconds = 1.0
+                    yield {
+                        "type": event.get("type", ""),
+                        "object": self._job_to_dict(job),
+                    }
+            except Exception as exc:
+                status = getattr(exc, "status", None)
+                if (
+                    ApiException is not None
+                    and isinstance(exc, ApiException)
+                    and status == 410
+                ):
+                    logger.warning(
+                        "Job watch expired at resourceVersion=%s; relisting",
+                        resource_version or "<initial>",
+                    )
+                    resource_version = ""
+                    backoff_seconds = 1.0
+                    continue
+
+                logger.warning(
+                    "Job watch failed: %s; retrying in %.1fs",
+                    exc,
+                    backoff_seconds,
+                )
+                time.sleep(backoff_seconds)
+                backoff_seconds = min(30.0, backoff_seconds * 2)
+            finally:
+                if job_watch is not None:
+                    try:
+                        job_watch.stop()
+                    except Exception:
+                        logger.debug("Failed to stop Job watch", exc_info=True)
 
     def patch_job(self, name: str, body: dict,
                   namespace: str = "default") -> dict:
@@ -893,14 +1012,37 @@ def _qonductor_runtime_env() -> list[dict[str, str]]:
     ]
 
 
+def _rfc1123_fragment(value: str) -> str:
+    """Normalize one identifier fragment for Kubernetes resource names."""
+    name = re.sub(r"[^a-z0-9.-]+", "-", str(value).lower())
+    return re.sub(r"-+", "-", name).strip("-.")
+
+
+def _resource_hash(value: str, length: int = 8) -> str:
+    """Return a short stable hash for parent resource context."""
+    return hashlib.sha1(str(value).encode("utf-8")).hexdigest()[:length]
+
+
 def _rfc1123_name(*parts: str, max_length: int = 63) -> str:
-    """Build a Kubernetes-safe resource name from arbitrary identifiers."""
+    """Build a Kubernetes-safe name while preserving the final suffix."""
     raw = "-".join(str(part) for part in parts if part)
     name = re.sub(r"[^a-z0-9.-]+", "-", raw.lower())
     name = re.sub(r"-+", "-", name).strip("-.")
     if not name:
         name = "qonductor"
-    return name[:max_length].rstrip("-.") or "qonductor"
+    if len(name) <= max_length:
+        return name
+
+    suffix = _rfc1123_fragment(str(parts[-1])) if parts else ""
+    if not suffix:
+        return name[:max_length].rstrip("-.") or "qonductor"
+    if len(suffix) >= max_length:
+        return suffix[:max_length].rstrip("-.") or "qonductor"
+
+    prefix_budget = max_length - len(suffix) - 1
+    prefix = _rfc1123_fragment("-".join(str(part) for part in parts[:-1] if part))
+    prefix = prefix[:prefix_budget].rstrip("-.") or "qonductor"
+    return f"{prefix}-{suffix}"
 
 
 def _serialize_circuit_for_executor(circuit) -> dict[str, str]:
@@ -987,8 +1129,12 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
         The K8s Job name.
     """
     client = client_override or _get_client(mode)
-    job_name = _rfc1123_name("qonductor", step_node.step_id, uuid.uuid4().hex[:6])
     workflow_name = cr.get("metadata", {}).get("name", "")
+    job_name = _rfc1123_name(
+        "qonductor",
+        step_node.step_id,
+        f"{_resource_hash(workflow_name)}-{uuid.uuid4().hex[:12]}",
+    )
     workflow_inputs = cr.get("spec", {}).get("workflowInputs", {})
 
     resources = {}
@@ -1058,6 +1204,7 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
         },
         "spec": {
             "backoffLimit": int(cr.get("spec", {}).get("maxRetries", 100)),
+            "ttlSecondsAfterFinished": JOB_TTL_SECONDS,
             "template": {
                 "metadata": {"labels": {"app": "qonductor-classical"}},
                 "spec": pod_spec,
@@ -1083,8 +1230,9 @@ def create_quantum_execution_job(
     2. ``quantum.ibm.com/qpu=1`` resource request so kube-scheduler can
        also filter on the extended resource.
 
-    The container receives a structured QASM payload and the QPU JSON
-    profile is available via a hostPath volume mount.
+    The container receives the structured QASM payload via a ConfigMap-mounted
+    JSON file, and the QPU JSON profile is available via a hostPath volume
+    mount.
 
     Args:
         scheduling_job: ``SchedulingJob`` containing the transpiled circuits.
@@ -1100,7 +1248,11 @@ def create_quantum_execution_job(
     qj_name = quantum_job_cr.get("metadata", {}).get("name", "")
     workflow_ref = qj_spec.get("workflowRef", "")
     step_id = qj_spec.get("stepId", "")
-    job_name = _rfc1123_name("qonductor-q", step_id, uuid.uuid4().hex[:6])
+    job_name = _rfc1123_name(
+        "qonductor-q",
+        step_id,
+        f"{_resource_hash(qj_name or workflow_ref)}-{uuid.uuid4().hex[:12]}",
+    )
 
     if scheduling_job and scheduling_job.circuits:
         circuit_payload = [
@@ -1117,12 +1269,33 @@ def create_quantum_execution_job(
         if param_binds:
             payload["parameter_binds"] = param_binds
         circuit_payload = [payload]
-    legacy_qasm = "\n---QONDUCTOR-CIRCUIT---\n".join(
-        item["qasm"] for item in circuit_payload
-    )
     circuit_format = circuit_payload[0]["format"] if circuit_payload else "qasm2"
+    payload_json = json.dumps(circuit_payload)
+    payload_size = len(payload_json.encode("utf-8"))
+    if payload_size > QUANTUM_PAYLOAD_CONFIGMAP_MAX_BYTES:
+        raise ValueError(
+            "Quantum execution payload is "
+            f"{payload_size} bytes, exceeds ConfigMap limit "
+            f"{QUANTUM_PAYLOAD_CONFIGMAP_MAX_BYTES} bytes"
+        )
 
     qpu_name = assigned_backend.name
+    namespace = quantum_job_cr.get("metadata", {}).get("namespace", "default")
+    payload_configmap_name = _rfc1123_name(job_name, "payload")
+    payload_path = f"{QUANTUM_PAYLOAD_MOUNT_PATH}/{QUANTUM_PAYLOAD_FILE_NAME}"
+    payload_labels = {
+        "app": "qonductor",
+        "component": "quantum-payload",
+        "workflow": workflow_ref,
+        "step_id": step_id,
+        "quantum_job_cr": qj_name,
+    }
+    client.create_configmap(
+        payload_configmap_name,
+        {QUANTUM_PAYLOAD_FILE_NAME: payload_json},
+        labels=payload_labels,
+        namespace=namespace,
+    )
 
     job_manifest = {
         "apiVersion": "batch/v1",
@@ -1140,6 +1313,7 @@ def create_quantum_execution_job(
         },
         "spec": {
             "suspend": True,
+            "ttlSecondsAfterFinished": JOB_TTL_SECONDS,
             "template": {
                 "metadata": {"labels": {"app": "qonductor-quantum"}},
                 "spec": {
@@ -1172,16 +1346,15 @@ def create_quantum_execution_job(
                         "env": [
                             *_qonductor_runtime_env(),
                             {"name": "QONDUCTOR_MODE", "value": mode},
-                            {"name": "QONDUCTOR_NAMESPACE", "value": quantum_job_cr.get("metadata", {}).get("namespace", "default")},
+                            {"name": "QONDUCTOR_NAMESPACE", "value": namespace},
                             {"name": "QUANTUM_JOB_NAME", "value": qj_name},
                             {"name": "QONDUCTOR_WORKFLOW_NAME", "value": workflow_ref},
                             {"name": "QPU_NAME", "value": qpu_name},
                             {"name": "QPU_JSON_PATH",
                              "value": f"/etc/qonductor/qpus/{qpu_name}.json"},
-                            {"name": "CIRCUIT_PAYLOAD_JSON",
-                             "value": json.dumps(circuit_payload)},
+                            {"name": "CIRCUIT_PAYLOAD_PATH",
+                             "value": payload_path},
                             {"name": "CIRCUIT_FORMAT", "value": circuit_format},
-                            {"name": "CIRCUIT_QASM", "value": legacy_qasm},
                             {"name": "SHOTS", "value": str(scheduling_job.shots)},
                         ],
                         "resources": {
@@ -1194,22 +1367,41 @@ def create_quantum_execution_job(
                                 "memory": "1Gi",
                             },
                         },
-                        "volumeMounts": [{
+                        "volumeMounts": [
+                            {
+                                "name": "qpu-profiles",
+                                "mountPath": "/etc/qonductor/qpus",
+                                "readOnly": True,
+                            },
+                            {
+                                "name": "circuit-payload",
+                                "mountPath": QUANTUM_PAYLOAD_MOUNT_PATH,
+                                "readOnly": True,
+                            },
+                        ],
+                    }],
+                    "volumes": [
+                        {
                             "name": "qpu-profiles",
-                            "mountPath": "/etc/qonductor/qpus",
-                            "readOnly": True,
-                        }],
-                    }],
-                    "volumes": [{
-                        "name": "qpu-profiles",
-                        "hostPath": {"path": "/etc/qonductor/qpus"},
-                    }],
+                            "hostPath": {"path": "/etc/qonductor/qpus"},
+                        },
+                        {
+                            "name": "circuit-payload",
+                            "configMap": {
+                                "name": payload_configmap_name,
+                                "items": [{
+                                    "key": QUANTUM_PAYLOAD_FILE_NAME,
+                                    "path": QUANTUM_PAYLOAD_FILE_NAME,
+                                }],
+                            },
+                        },
+                    ],
                     "restartPolicy": "Never",
                 },
             },
         },
     }
-    return client.create_job(job_manifest)
+    return client.create_job(job_manifest, namespace=namespace)
 
 def create_quantum_job_cr(step_node, workflow_cr: dict,
                           mode: str = "local",
@@ -1227,8 +1419,9 @@ def create_quantum_job_cr(step_node, workflow_cr: dict,
     client = client_override or _get_client(mode)
     metadata = getattr(step_node, "metadata", {}) or {}
     resource_reqs = getattr(step_node, "resource_requirements", {}) or {}
+    workflow_name = workflow_cr.get("metadata", {}).get("name", "")
     spec = {
-        "workflowRef": workflow_cr.get("metadata", {}).get("name", ""),
+        "workflowRef": workflow_name,
         "stepId": step_node.step_id,
         "label": step_node.label,
         "qubits": resource_reqs.get("qubits", 10),
@@ -1266,10 +1459,14 @@ def create_quantum_job_cr(step_node, workflow_cr: dict,
         "apiVersion": f"{HYBRID_WORKFLOW_GROUP}/{HYBRID_WORKFLOW_VERSION}",
         "kind": "QuantumJob",
         "metadata": {
-            "name": _rfc1123_name("qj", step_node.step_id, uuid.uuid4().hex[:4]),
+            "name": _rfc1123_name(
+                "qj",
+                step_node.step_id,
+                f"{_resource_hash(workflow_name)}-{uuid.uuid4().hex[:12]}",
+            ),
             "labels": {
                 "app": "qonductor",
-                "workflow": workflow_cr.get("metadata", {}).get("name", ""),
+                "workflow": workflow_name,
                 "step_id": step_node.step_id,
             },
         },

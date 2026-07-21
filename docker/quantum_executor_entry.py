@@ -7,7 +7,8 @@ Reads the following environment variables (set by
 
 - ``QPU_NAME``              — name of the QPU backend (e.g. "qpu0_27q")
 - ``QPU_JSON_PATH``         — path to the QPU calibration JSON file
-- ``CIRCUIT_PAYLOAD_JSON``  — JSON list of {format, qasm} circuit payloads
+- ``CIRCUIT_PAYLOAD_PATH``  — JSON file with {format, qasm} circuit payloads
+- ``CIRCUIT_PAYLOAD_JSON``  — legacy JSON list payload fallback
 - ``CIRCUIT_QASM``          — legacy single-circuit QASM fallback
 - ``SHOTS``                 — number of measurement shots
 - ``QUANTUM_JOB_NAME``      — optional QuantumJob CR to patch with results
@@ -78,13 +79,22 @@ def build_noise_model(qpu_data: dict) -> NoiseModel:
     return noise
 
 
-def _load_payloads() -> list[dict[str, str]]:
+def _decode_payload_json(payload_json: str, source: str) -> list[dict[str, Any]]:
+    payload = json.loads(payload_json)
+    if not isinstance(payload, list):
+        raise ValueError(f"{source} must be a list")
+    return payload
+
+
+def _load_payloads() -> list[dict[str, Any]]:
+    payload_path = os.environ.get("CIRCUIT_PAYLOAD_PATH", "")
+    if payload_path:
+        with open(payload_path, encoding="utf-8") as fh:
+            return _decode_payload_json(fh.read(), "CIRCUIT_PAYLOAD_PATH")
+
     payload_json = os.environ.get("CIRCUIT_PAYLOAD_JSON", "")
     if payload_json:
-        payload = json.loads(payload_json)
-        if not isinstance(payload, list):
-            raise ValueError("CIRCUIT_PAYLOAD_JSON must be a list")
-        return payload
+        return _decode_payload_json(payload_json, "CIRCUIT_PAYLOAD_JSON")
 
     circuit_qasm = os.environ.get("CIRCUIT_QASM", "")
     if not circuit_qasm:
@@ -95,7 +105,7 @@ def _load_payloads() -> list[dict[str, str]]:
     }]
 
 
-def _load_circuit(item: dict[str, str]) -> QuantumCircuit:
+def _load_circuit(item: dict[str, Any]) -> QuantumCircuit:
     qasm_text = item.get("qasm", "")
     circuit_format = (item.get("format") or "qasm2").lower()
     if not qasm_text:
@@ -150,7 +160,7 @@ def main() -> None:
     try:
         payloads = _load_payloads()
         if not qpu_json_path or not payloads:
-            raise ValueError("Missing QPU_JSON_PATH or circuit payload env var")
+            raise ValueError("Missing QPU_JSON_PATH or circuit payload")
 
         qpu_data = load_qpu_json(qpu_json_path)
         noise = build_noise_model(qpu_data)

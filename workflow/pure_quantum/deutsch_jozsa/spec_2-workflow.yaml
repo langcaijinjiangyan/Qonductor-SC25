@@ -1,0 +1,76 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-009-pure-quantum-deutsch-jozsa-2-20260720174330-eb403e1
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: deutsch-jozsa
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 3e051f05f5a6
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: dj_indep_qiskit_2
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa/dj_indep_qiskit_2.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-17
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[2] q;
+
+        bit[1] c;
+
+        rz(-pi/2) q[0];
+
+        sx q[0];
+
+        rz(pi) q[0];
+
+        rz(pi/2) q[1];
+
+        sx q[1];
+
+        rz(-pi/2) q[1];
+
+        cx q[0],q[1];
+
+        sx q[0];
+
+        rz(-pi/2) q[0];
+
+        barrier q[0],q[1];
+
+        c[0] = measure q[0];
+
+        '
+      circuitFormat: qasm3
+      qubits: 2
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/deutsch_jozsa/spec_2.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa/spec_2.json

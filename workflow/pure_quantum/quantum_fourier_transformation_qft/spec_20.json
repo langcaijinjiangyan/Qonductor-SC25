@@ -2,7 +2,7 @@
   "version": 2,
   "qnode": "20",
   "circuits": {
-    "qft_indep_qiskit_20": "qft_indep_qiskit_20.qasm"
+    "qft_indep_qiskit_20": "qft_indep_qiskit_20.qasm3"
   },
   "hybrid_job": false
 }

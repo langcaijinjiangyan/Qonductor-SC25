@@ -12,6 +12,19 @@ from typing import Any
 
 import yaml
 
+DEFAULT_QUANTUM_TIMEOUT_SECONDS = 21600.0
+
+
+class QuotedString(str):
+    pass
+
+
+def _quoted_string_representer(dumper: yaml.SafeDumper, data: QuotedString) -> yaml.nodes.ScalarNode:
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="'")
+
+
+yaml.SafeDumper.add_representer(QuotedString, _quoted_string_representer)
+
 
 def find_project_root(start: Path | None = None) -> Path:
     cursor = (start or Path(__file__)).resolve()
@@ -81,7 +94,7 @@ def build_manifest(
             },
         },
         "spec": {
-            "workflowImageRef": image.image_id,
+            "workflowImageRef": QuotedString(str(image.image_id)),
             "priority": priority,
             "maxRetries": 3,
             "containers": containers,
@@ -270,6 +283,7 @@ def hybrid_inputs(
     shots: int,
     max_iterations: int,
     priority: str,
+    quantum_timeout_seconds: float = DEFAULT_QUANTUM_TIMEOUT_SECONDS,
 ) -> tuple[dict[str, Any], str, str]:
     spec, logical_id, qasm_path, qasm_text = load_spec_and_qasm(workload_dir, spec_file)
     params = load_json(workload_dir / parameters_file)
@@ -292,6 +306,7 @@ def hybrid_inputs(
         "clbits": params.get("num_clbits", params.get("num_qubits", 12)),
         "shots": shots,
         "maxIterations": max_iterations,
+        "quantumTimeoutSeconds": quantum_timeout_seconds,
         "priority": priority,
         "seed": 12345,
         "source": source,
@@ -397,6 +412,7 @@ def hybrid_main(
     parser.add_argument("--emit-manifest", action="store_true")
     parser.add_argument("--shots", type=int, default=1024)
     parser.add_argument("--max-iterations", type=int, default=200)
+    parser.add_argument("--quantum-timeout-seconds", type=float, default=DEFAULT_QUANTUM_TIMEOUT_SECONDS)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--priority", choices=("balanced", "fidelity", "jct"), default="balanced")
     parser.add_argument("--registry-root", default="data/workflow_registry")
@@ -412,6 +428,7 @@ def hybrid_main(
         shots=shots,
         max_iterations=max_iterations,
         priority=args.priority,
+        quantum_timeout_seconds=args.quantum_timeout_seconds,
     )
     workflow_name = args.workflow_name or k8s_name(f"{workload_dir.name}-{Path(spec_file).stem}-dynamic")
     image = build_hybrid_image(
@@ -432,7 +449,10 @@ def hybrid_main(
     manifest_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
     print(f"workflowImageRef={image.image_id}")
     print(f"manifest={manifest_path}")
-    print(f"benchmark={benchmark}, driver={driver_kind}, iterations={max_iterations}, shots={shots}")
+    print(
+        f"benchmark={benchmark}, driver={driver_kind}, iterations={max_iterations}, "
+        f"shots={shots}, quantumTimeoutSeconds={args.quantum_timeout_seconds}"
+    )
     if args.submit:
         kubectl = PROJECT_ROOT / "kubectl"
         cmd = [str(kubectl if kubectl.exists() else "kubectl"), "apply", "-f", str(manifest_path)]

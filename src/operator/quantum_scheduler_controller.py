@@ -17,6 +17,7 @@ Triggers (from paper §7):
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 import threading
@@ -103,25 +104,33 @@ class QuantumSchedulerController:
         mode: str = "local",
         scheduling_interval: int = 30,
         scheduling_threshold: int = 10,
+        transpilation_cache_enabled: bool = True,
+        transpilation_cache_size: int = 256,
     ) -> None:
         self.mode = mode
         self.k8s = K8sClient(mode=mode)
         self.scheduling_interval = scheduling_interval
         self.scheduling_threshold = scheduling_threshold
+        self.transpilation_cache_enabled = transpilation_cache_enabled
 
         # The NSGA-II scheduler (reuses existing implementation).
         if _HAS_MULTI_SCHEDULER:
             self.scheduler = MultiObjectiveScheduler(
                 transpilation_level=TranspilationLevel.PRE_TRANSPILED,
                 problem_type=ProblemType.DISCRETE,
+                transpilation_cache_enabled=transpilation_cache_enabled,
+                transpilation_cache_size=transpilation_cache_size,
             )
         else:
             self.scheduler = None
 
         # Pending quantum jobs (paper's "job queue Q").
         self._pending: list[_PendingQuantumJob] = []
+        self._known_quantum_jobs: set[str] = set()
         self._last_schedule_time = time.monotonic()
         self._stop_event = threading.Event()
+        self._pending_condition = threading.Condition()
+        self._schedule_lock = threading.Lock()
 
         # Backends — load from QPU profile ConfigMaps (published by the
         # device plugin on each quantum node).  Falls back to node-label
@@ -153,11 +162,17 @@ class QuantumSchedulerController:
 
         # Results cache for workflowResults().
         self._scheduling_results: dict[str, dict] = {}
+        self._result_keys_by_cr: dict[str, str] = {}
+        self._execution_jobs: dict[str, str] = {}
+        self._execution_job_owners: dict[str, str] = {}
 
         logger.info(
             "QuantumSchedulerController ready: %d backends, "
-            "interval=%ds, threshold=%d",
+            "interval=%ds, threshold=%d, transpilation_cache=%s, "
+            "cache_size=%d",
             len(self._backends), scheduling_interval, scheduling_threshold,
+            "enabled" if transpilation_cache_enabled else "disabled",
+            transpilation_cache_size,
         )
 
     def _discover_backends_from_nodes(self) -> list[Any]:
@@ -280,27 +295,44 @@ class QuantumSchedulerController:
             if qj.get("status", {}).get("phase") in ("Pending", None):
                 self._enqueue(qj)
 
-        # Watch for new QuantumJob CRs.
-        watcher = self.k8s.watch_cr(QUANTUM_JOB_PLURAL)
-        for event in watcher:
-            if self._stop_event.is_set():
-                break
-            ev_type = event.get("type", "")
-            obj = event.get("object", {})
+        scheduler_thread = threading.Thread(
+            target=self._scheduling_loop,
+            name="quantum-scheduling-worker",
+            daemon=True,
+        )
+        scheduler_thread.start()
 
-            if ev_type == "ADDED":
+        try:
+            # Keep consuming events while scheduling runs independently.
+            watcher = self.k8s.watch_cr(QUANTUM_JOB_PLURAL)
+            for event in watcher:
+                if self._stop_event.is_set():
+                    break
+                ev_type = event.get("type", "")
+                obj = event.get("object", {})
+
                 phase = obj.get("status", {}).get("phase", "")
-                if phase in ("", "Pending"):
-                    self._enqueue(obj)
-                    self._check_trigger()
+                if ev_type in ("ADDED", "MODIFIED"):
+                    if phase in ("", "Pending"):
+                        self._enqueue(obj)
+                    elif phase in ("Completed", "Failed", "Cancelled"):
+                        self._forget_quantum_job(obj)
 
-            elif ev_type == "HEARTBEAT":
-                self._check_trigger()
+                elif ev_type == "DELETED":
+                    self._forget_quantum_job(obj)
+
+                elif ev_type == "HEARTBEAT":
+                    self._check_trigger()
+        finally:
+            self.stop()
+            scheduler_thread.join(timeout=1.0)
 
         logger.info("QuantumSchedulerController stopped")
 
     def stop(self) -> None:
         self._stop_event.set()
+        with self._pending_condition:
+            self._pending_condition.notify_all()
 
     def schedule_pending_now(self) -> dict | None:
         """Force an immediate scheduling cycle (useful for tests)."""
@@ -334,77 +366,166 @@ class QuantumSchedulerController:
         """Add a QuantumJob CR to the pending queue."""
         spec = cr.get("spec", {})
         cr_name = cr["metadata"]["name"]
-        if any(item.cr_name == cr_name for item in self._pending):
-            logger.debug(
-                "QuantumJob %s already pending; skipping duplicate event",
-                cr_name,
-            )
-            return
+        with self._pending_condition:
+            if cr_name in self._known_quantum_jobs:
+                logger.debug(
+                    "QuantumJob %s already pending; skipping duplicate event",
+                    cr_name,
+                )
+                return
 
-        qj = _PendingQuantumJob(
-            cr_name=cr_name,
-            step_id=spec.get("stepId", ""),
-            workflow_ref=spec.get("workflowRef", ""),
-            qubits=spec.get("qubits", 10),
-            shots=spec.get("shots", 4000),
-            priority=spec.get("priority", "balanced"),
-            cr=cr,
-            logical_circuit_id=spec.get("logicalCircuitId", ""),
-            circuit_qasm=spec.get("circuitQasm", ""),
-            circuit_format=spec.get("circuitFormat", "qasm2"),
-            parameter_bindings=spec.get("parameterBindings", {}) or {},
-            schedule_immediately=bool(spec.get("scheduleImmediately", False)),
-        )
-        self._pending.append(qj)
+            qj = _PendingQuantumJob(
+                cr_name=cr_name,
+                step_id=spec.get("stepId", ""),
+                workflow_ref=spec.get("workflowRef", ""),
+                qubits=spec.get("qubits", 10),
+                shots=spec.get("shots", 4000),
+                priority=spec.get("priority", "balanced"),
+                cr=cr,
+                logical_circuit_id=spec.get("logicalCircuitId", ""),
+                circuit_qasm=spec.get("circuitQasm", ""),
+                circuit_format=spec.get("circuitFormat", "qasm2"),
+                parameter_bindings=spec.get("parameterBindings", {}) or {},
+                schedule_immediately=bool(
+                    spec.get("scheduleImmediately", False)
+                ),
+            )
+            self._pending.append(qj)
+            self._known_quantum_jobs.add(cr_name)
+            self._pending_condition.notify()
         logger.debug("Enqueued QuantumJob %s (%d qubits)", qj.step_id, qj.qubits)
 
+    def _cache_result(self, qj: _PendingQuantumJob, result: dict) -> None:
+        """Cache an in-flight result with ownership information for cleanup."""
+        result["quantum_job"] = qj.cr_name
+        self._scheduling_results[qj.step_id] = result
+        self._result_keys_by_cr[qj.cr_name] = qj.step_id
+
+    def _cache_execution_job(
+        self, qj: _PendingQuantumJob, execution_job: str,
+    ) -> None:
+        self._execution_jobs[qj.step_id] = execution_job
+        self._execution_job_owners[qj.step_id] = qj.cr_name
+
+    def _forget_quantum_job(self, cr: dict) -> None:
+        """Release queue and cache state for a terminal or deleted QuantumJob."""
+        cr_name = cr.get("metadata", {}).get("name", "")
+        if not cr_name:
+            return
+
+        with self._pending_condition:
+            self._known_quantum_jobs.discard(cr_name)
+            self._pending[:] = [
+                qj for qj in self._pending if qj.cr_name != cr_name
+            ]
+
+        step_id = self._result_keys_by_cr.pop(cr_name, None)
+        if not step_id:
+            step_id = cr.get("spec", {}).get("stepId", "")
+        if not step_id:
+            return
+
+        result = self._scheduling_results.get(step_id)
+        if result and result.get("quantum_job") == cr_name:
+            self._scheduling_results.pop(step_id, None)
+        if self._execution_job_owners.get(step_id) == cr_name:
+            self._execution_job_owners.pop(step_id, None)
+            self._execution_jobs.pop(step_id, None)
+
     def _check_trigger(self) -> None:
-        """Check whether scheduling should be triggered.
+        """Wake the scheduling worker to re-evaluate its trigger conditions."""
+        with self._pending_condition:
+            self._pending_condition.notify()
 
-        Two triggers (paper §7):
-        1. Queue size >= scheduling_threshold
-        2. Time since last schedule >= scheduling_interval AND queue non-empty
-        """
-        elapsed = time.monotonic() - self._last_schedule_time
-        queue_size = len(self._pending)
+    def _scheduling_loop(self) -> None:
+        """Wait for trigger conditions and run scheduling outside the watch."""
+        while not self._stop_event.is_set():
+            trigger_message = ""
+            trigger_args: tuple[Any, ...] = ()
 
-        if any(qj.schedule_immediately for qj in self._pending):
-            logger.info("Trigger: scheduleImmediately requested, queue size=%d",
-                        queue_size)
-            self._safe_run_scheduling_cycle()
-        elif queue_size >= self.scheduling_threshold:
-            logger.info("Trigger: queue size %d >= threshold %d",
-                        queue_size, self.scheduling_threshold)
-            self._safe_run_scheduling_cycle()
-        elif elapsed >= self.scheduling_interval and queue_size > 0:
-            logger.info("Trigger: interval %.0fs elapsed, queue size=%d",
-                        elapsed, queue_size)
+            with self._pending_condition:
+                while not self._stop_event.is_set():
+                    queue_size = len(self._pending)
+                    if queue_size == 0:
+                        self._pending_condition.wait()
+                        continue
+
+                    elapsed = time.monotonic() - self._last_schedule_time
+                    if any(qj.schedule_immediately for qj in self._pending):
+                        trigger_message = (
+                            "Trigger: scheduleImmediately requested, "
+                            "queue size=%d"
+                        )
+                        trigger_args = (queue_size,)
+                        break
+                    if queue_size >= self.scheduling_threshold:
+                        trigger_message = "Trigger: queue size %d >= threshold %d"
+                        trigger_args = (queue_size, self.scheduling_threshold)
+                        break
+                    if elapsed >= self.scheduling_interval:
+                        trigger_message = (
+                            "Trigger: interval %.0fs elapsed, queue size=%d"
+                        )
+                        trigger_args = (elapsed, queue_size)
+                        break
+
+                    self._pending_condition.wait(
+                        timeout=max(0.0, self.scheduling_interval - elapsed),
+                    )
+
+            if self._stop_event.is_set():
+                break
+
+            logger.info(trigger_message, *trigger_args)
             self._safe_run_scheduling_cycle()
 
     def _safe_run_scheduling_cycle(self) -> dict | None:
         """Run one scheduling cycle without letting exceptions kill the thread."""
-        try:
-            return self._run_scheduling_cycle()
-        except Exception:
-            logger.exception(
-                "Quantum scheduling cycle failed; controller will keep running",
-            )
-            return None
+        with self._schedule_lock:
+            try:
+                return self._run_scheduling_cycle()
+            except Exception:
+                logger.exception(
+                    "Quantum scheduling cycle failed; controller will keep running",
+                )
+                return None
 
     def _build_scheduling_job(self, qj: _PendingQuantumJob) -> SchedulingJob:
         """Convert a QuantumJob CR into the scheduler's native job object."""
-        circuit = self._load_circuit_for_job(qj)
-        return SchedulingJob(circuits=[circuit], shots=qj.shots)
+        circuit = self._load_circuit_for_job(
+            qj, bind_parameters=not self.transpilation_cache_enabled,
+        )
+        if not self.transpilation_cache_enabled:
+            return SchedulingJob(circuits=[circuit], shots=qj.shots)
 
-    def _load_circuit_for_job(self, qj: _PendingQuantumJob):
+        if qj.circuit_qasm:
+            cache_material = (
+                f"{(qj.circuit_format or 'qasm2').lower()}\0"
+                f"{qj.circuit_qasm}"
+            ).encode("utf-8")
+        else:
+            cache_material = f"fallback\0{qj.qubits}".encode("ascii")
+        cache_key = hashlib.sha256(cache_material).hexdigest()
+        self._validate_parameter_bindings(circuit, qj.parameter_bindings)
+        return SchedulingJob(
+            circuits=[circuit],
+            shots=qj.shots,
+            transpilation_cache_key=cache_key,
+            parameter_bindings=dict(qj.parameter_bindings),
+        )
+
+    def _load_circuit_for_job(
+        self, qj: _PendingQuantumJob, *, bind_parameters: bool = True,
+    ):
         """Load a real circuit from QuantumJob spec, or use a fallback."""
         if qj.circuit_qasm:
             circuit = self._load_circuit_from_qasm(
                 qj.circuit_qasm, qj.circuit_format,
             )
-            circuit = self._bind_parameters(
-                circuit, qj.parameter_bindings,
-            )
+            if bind_parameters:
+                circuit = self._bind_parameters(
+                    circuit, qj.parameter_bindings,
+                )
             circuit.name = qj.logical_circuit_id or f"{qj.step_id}_circuit"
             return circuit
 
@@ -459,6 +580,28 @@ class QuantumSchedulerController:
             return circuit.assign_parameters(assignments, inplace=False)
         return circuit.bind_parameters(assignments)
 
+    @staticmethod
+    def _validate_parameter_bindings(
+        circuit, bindings: dict[str, float],
+    ) -> None:
+        if not bindings:
+            return
+        parameters = {p.name: p for p in circuit.parameters}
+        parameters.update({str(p): p for p in circuit.parameters})
+        unknown = sorted(name for name in bindings if name not in parameters)
+        if unknown:
+            logger.warning(
+                "Ignoring parameter bindings not present in circuit: %s",
+                ", ".join(unknown),
+            )
+        assignments = {
+            parameter: float(value)
+            for name, value in bindings.items()
+            if (parameter := parameters.get(name)) is not None
+        }
+        if assignments:
+            circuit.assign_parameters(assignments, inplace=False)
+
     def _run_scheduling_cycle(self) -> dict | None:
         """Execute one quantum scheduling cycle.
 
@@ -467,13 +610,13 @@ class QuantumSchedulerController:
         2. Optimization: NSGA-II Pareto front
         3. Selection: MCDM pseudo-weights
         """
-        if not self._pending:
-            return None
-
-        # Drain pending queue.
-        pending = self._pending[:]
-        self._pending.clear()
-        self._last_schedule_time = time.monotonic()
+        # Drain pending queue while the watch thread continues accepting jobs.
+        with self._pending_condition:
+            if not self._pending:
+                return None
+            pending = self._pending[:]
+            self._pending.clear()
+            self._last_schedule_time = time.monotonic()
 
         logger.info("Scheduling cycle: %d quantum jobs", len(pending))
 
@@ -500,7 +643,7 @@ class QuantumSchedulerController:
                     "status": "Failed",
                     "error": str(exc),
                 }
-                self._scheduling_results[qj.step_id] = result_entry
+                self._cache_result(qj, result_entry)
                 cycle_results[qj.step_id] = result_entry
                 try:
                     self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
@@ -554,10 +697,6 @@ class QuantumSchedulerController:
 
         # ---- Stage 3: Selection (MCDM) ----
         # Assign QPU, update CR, and dispatch K8s Job for circuit execution.
-        self._execution_jobs: dict[str, str] = getattr(
-            self, "_execution_jobs", {}
-        )
-
         # Extract per-job estimates from scheduler metadata
         solution_fidelities = metadata.get("solution_fidelities", [])
         solution_exec_times = metadata.get("solution_execution_times", [])
@@ -593,7 +732,7 @@ class QuantumSchedulerController:
                 "arrived_at": qj.arrived_at,
                 "scheduling_metadata": scheduler_metadata,
             }
-            self._scheduling_results[qj.step_id] = result_entry
+            self._cache_result(qj, result_entry)
             cycle_results[qj.step_id] = result_entry
 
             # Update QuantumJob CR status to Scheduled with estimates
@@ -612,7 +751,9 @@ class QuantumSchedulerController:
                     "re-queueing for a later scheduling cycle",
                     qj.cr_name,
                 )
-                self._pending.append(qj)
+                with self._pending_condition:
+                    self._pending.append(qj)
+                    self._pending_condition.notify()
                 continue
 
             # Dispatch a K8s Job to execute the circuit on the assigned
@@ -625,7 +766,7 @@ class QuantumSchedulerController:
                     mode=self.mode,
                     client_override=self.k8s,
                 )
-                self._execution_jobs[qj.step_id] = exec_job_name
+                self._cache_execution_job(qj, exec_job_name)
                 try:
                     self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
                         "executionJob": exec_job_name,
@@ -647,6 +788,20 @@ class QuantumSchedulerController:
                     "Failed to create K8s Job for quantum step '%s'",
                     qj.step_id,
                 )
+                try:
+                    self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
+                        "phase": "Failed",
+                        "conditions": [{
+                            "type": "ExecutionJobCreationFailed",
+                            "status": "True",
+                            "reason": "Could not create quantum execution Job",
+                        }],
+                    })
+                except Exception:
+                    logger.exception(
+                        "Failed to mark QuantumJob %s as failed",
+                        qj.cr_name,
+                    )
 
         for qj in pending[len(assignments):]:
             result_entry = {
@@ -655,7 +810,7 @@ class QuantumSchedulerController:
                 "assigned_qpu": "none",
                 "status": "Rejected",
             }
-            self._scheduling_results[qj.step_id] = result_entry
+            self._cache_result(qj, result_entry)
             cycle_results[qj.step_id] = result_entry
             try:
                 self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {

@@ -19,7 +19,7 @@
       "size_bucket": "small",
       "spec_version": 2,
       "circuit_files": [
-        "grover-v-chain_indep_qiskit_2.qasm"
+        "grover-v-chain_indep_qiskit_2.qasm3"
       ],
       "parameter_file": null
     },
@@ -40,7 +40,7 @@
       "size_bucket": "small",
       "spec_version": 2,
       "circuit_files": [
-        "grover-v-chain_indep_qiskit_4.qasm"
+        "grover-v-chain_indep_qiskit_4.qasm3"
       ],
       "parameter_file": null
     }

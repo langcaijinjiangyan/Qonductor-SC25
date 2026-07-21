@@ -1,0 +1,144 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-036-pure-quantum-quantum-fourier-transformation-qft-4-20260
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: quantum-fourier-transformation-qft
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 2d42c661e621
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: qft_indep_qiskit_4
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/quantum_fourier_transformation_qft/qft_indep_qiskit_4.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-18
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[4] q;
+
+        bit[4] c;
+
+        bit[4] meas;
+
+        rz(pi/2) q[3];
+
+        sx q[3];
+
+        rz(15*pi/16) q[3];
+
+        cx q[3],q[2];
+
+        rz(-pi/4) q[2];
+
+        cx q[3],q[2];
+
+        rz(3*pi/4) q[2];
+
+        sx q[2];
+
+        rz(7*pi/8) q[2];
+
+        cx q[3],q[1];
+
+        rz(-pi/8) q[1];
+
+        cx q[3],q[1];
+
+        rz(pi/8) q[1];
+
+        cx q[2],q[1];
+
+        rz(-pi/4) q[1];
+
+        cx q[2],q[1];
+
+        rz(3*pi/4) q[1];
+
+        sx q[1];
+
+        rz(3*pi/4) q[1];
+
+        cx q[3],q[0];
+
+        rz(-pi/16) q[0];
+
+        cx q[3],q[0];
+
+        rz(pi/16) q[0];
+
+        cx q[2],q[0];
+
+        rz(-pi/8) q[0];
+
+        cx q[2],q[0];
+
+        rz(pi/8) q[0];
+
+        cx q[1],q[0];
+
+        rz(-pi/4) q[0];
+
+        cx q[1],q[0];
+
+        rz(3*pi/4) q[0];
+
+        sx q[0];
+
+        rz(pi/2) q[0];
+
+        cx q[0],q[3];
+
+        cx q[1],q[2];
+
+        cx q[2],q[1];
+
+        cx q[1],q[2];
+
+        cx q[3],q[0];
+
+        cx q[0],q[3];
+
+        barrier q[0],q[1],q[2],q[3];
+
+        meas[0] = measure q[0];
+
+        meas[1] = measure q[1];
+
+        meas[2] = measure q[2];
+
+        meas[3] = measure q[3];
+
+        '
+      circuitFormat: qasm3
+      qubits: 4
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/quantum_fourier_transformation_qft/spec_4.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/quantum_fourier_transformation_qft
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/quantum_fourier_transformation_qft/spec_4.json

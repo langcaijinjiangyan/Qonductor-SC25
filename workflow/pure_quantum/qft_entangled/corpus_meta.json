@@ -19,7 +19,7 @@
       "size_bucket": "medium",
       "spec_version": 2,
       "circuit_files": [
-        "qftentangled_indep_qiskit_12.qasm"
+        "qftentangled_indep_qiskit_12.qasm3"
       ],
       "parameter_file": null
     },
@@ -40,7 +40,7 @@
       "size_bucket": "small",
       "spec_version": 2,
       "circuit_files": [
-        "qftentangled_indep_qiskit_2.qasm"
+        "qftentangled_indep_qiskit_2.qasm3"
       ],
       "parameter_file": null
     },
@@ -61,7 +61,7 @@
       "size_bucket": "small",
       "spec_version": 2,
       "circuit_files": [
-        "qftentangled_indep_qiskit_4.qasm"
+        "qftentangled_indep_qiskit_4.qasm3"
       ],
       "parameter_file": null
     },
@@ -82,7 +82,7 @@
       "size_bucket": "medium",
       "spec_version": 2,
       "circuit_files": [
-        "qftentangled_indep_qiskit_8.qasm"
+        "qftentangled_indep_qiskit_8.qasm3"
       ],
       "parameter_file": null
     }

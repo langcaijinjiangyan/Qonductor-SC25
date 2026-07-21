@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: quantum-approximation-optimization-algorithm-qaoa-spec-6-dynami
+  name: cov-065-hybrid-6q-quantum-approximation-optimization-algorithm
   namespace: default
   labels:
     app: qonductor
     algorithm: qaoa
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 26bcbc393437
+  workflowImageRef: 5c0af7738f4d
   priority: balanced
   maxRetries: 3
   containers:
@@ -21,7 +21,7 @@ spec:
   scheduling:
     classicalPolicy: FilterScore
     quantumPolicy: NSGA2
-    schedulingInterval: 120
+    schedulingInterval: 30
     schedulingThreshold: 1
   errorMitigation:
     enabled: false
@@ -55,6 +55,7 @@ spec:
       clbits: 6
       shots: 16
       maxIterations: 1
+      quantumTimeoutSeconds: 21600.0
       priority: balanced
       seed: 12345
       source:

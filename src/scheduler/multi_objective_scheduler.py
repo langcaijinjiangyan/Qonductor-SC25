@@ -1,6 +1,8 @@
 import logging
 import multiprocessing
+import os
 import sys
+from collections import OrderedDict
 from enum import Enum
 import time
 from multiprocessing.pool import ThreadPool
@@ -159,10 +161,26 @@ class MultiObjectiveScheduler(BaseScheduler):
         algorithm: Algorithm | None = None,
         estimator: BaseEstimator | None = None,
         problem_type: ProblemType = ProblemType.BINARY,
+        transpilation_cache_enabled: bool = True,
+        transpilation_cache_size: int = 256,
     ):
         self.transpilation_count = transpilation_count
         self.transpilation_level = transpilation_level
         self.problem_type = problem_type
+        self.transpilation_cache_enabled = transpilation_cache_enabled
+        self.transpilation_cache_size = max(1, transpilation_cache_size)
+        self._transpilation_cache: OrderedDict[
+            tuple[Any, ...], tuple[SchedulingJob, float]
+        ] = OrderedDict()
+        self._last_transpilation_cache_stats = {
+            "enabled": transpilation_cache_enabled,
+            "hits": 0,
+            "misses": 0,
+            "deduplicated": 0,
+            "evictions": 0,
+            "size": 0,
+            "capacity": self.transpilation_cache_size,
+        }
 
         self.algorithm = (
             algorithm
@@ -188,6 +206,12 @@ class MultiObjectiveScheduler(BaseScheduler):
         )
         self.estimator = estimator or RegressionEstimator()
         self.pre_transpiled_circuits = {}
+
+    def __getstate__(self):
+        """Avoid serializing the parent-process LRU into pool workers."""
+        state = self.__dict__.copy()
+        state["_transpilation_cache"] = OrderedDict()
+        return state
 
     def schedule(
         self,
@@ -232,6 +256,9 @@ class MultiObjectiveScheduler(BaseScheduler):
         metadata["transpilation_time"] = (
             end_transpilation_time - start_transpilation_time
         )
+        metadata["transpilation_cache"] = dict(
+            self._last_transpilation_cache_stats
+        )
         logger.info(
             "Transpilation took %f seconds", metadata["transpilation_time"]
         )
@@ -266,35 +293,35 @@ class MultiObjectiveScheduler(BaseScheduler):
         # Define the optimization problem
         start_optimization_time = timer()
 
-        num_threads = int(multiprocessing.cpu_count() / 2)
-        pool = ThreadPool(num_threads)
-        runner = StarmapParallelization(pool.starmap)
-        if self.problem_type == ProblemType.BINARY:
-            problem = BinarySchedulingProblem(
-                len(jobs),
-                len(backends),
-                execution_times,
-                fidelities,
-                waiting_times,
-                job_sizes,
-                backend_sizes,
-                elementwise_runner=runner,
-            )
-        else:
-            problem = DiscreteSchedulingProblem(
-                len(jobs),
-                len(backends),
-                execution_times,
-                fidelities,
-                waiting_times,
-                job_sizes,
-                backend_sizes,
-                elementwise_runner=runner,
-            )
-
-        # Run the optimization
+        num_threads = max(1, int(multiprocessing.cpu_count() / 2))
         start = time.perf_counter()
-        result = minimize(problem, self.algorithm, verbose=False)
+        with ThreadPool(num_threads) as pool:
+            runner = StarmapParallelization(pool.starmap)
+            if self.problem_type == ProblemType.BINARY:
+                problem = BinarySchedulingProblem(
+                    len(jobs),
+                    len(backends),
+                    execution_times,
+                    fidelities,
+                    waiting_times,
+                    job_sizes,
+                    backend_sizes,
+                    elementwise_runner=runner,
+                )
+            else:
+                problem = DiscreteSchedulingProblem(
+                    len(jobs),
+                    len(backends),
+                    execution_times,
+                    fidelities,
+                    waiting_times,
+                    job_sizes,
+                    backend_sizes,
+                    elementwise_runner=runner,
+                )
+
+            # Run the optimization while the elementwise runner is alive.
+            result = minimize(problem, self.algorithm, verbose=False)
         total = time.perf_counter() - start
         print(total)
         end_optimization_time = timer()
@@ -544,7 +571,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                 return None, 0.0
             swap_gate = swap_gate.pop()
             swap_gate_counts = [
-                transpiled_circuit.count_ops()[swap_gate]
+                transpiled_circuit.count_ops().get(swap_gate, 0)
                 for transpiled_circuit in transpiled_circuits
             ]
             best_transpiled_circuit = transpiled_circuits[
@@ -770,7 +797,186 @@ class MultiObjectiveScheduler(BaseScheduler):
             current_transpiled_job.append(transpiled_job)
             current_fidelities.append(fidelity)
 
-        return (current_transpiled_job, current_fidelities)   
+        return (current_transpiled_job, current_fidelities)
+
+    def _transpile_job_backend(
+        self,
+        job: SchedulingJob,
+        backend: Backend,
+    ) -> tuple[SchedulingJob | None, float]:
+        """Transpile one job for one backend for QPU-level parallelism."""
+        transpiled_circuits = []
+        circuit_fidelities = []
+        for circuit in job.circuits:
+            transpiled_circuit, circuit_fidelity = self._transpile_circuit(
+                circuit, backend,
+            )
+            transpiled_circuits.append(transpiled_circuit)
+            circuit_fidelities.append(circuit_fidelity)
+
+        if not all(circuit is not None for circuit in transpiled_circuits):
+            return None, 0.0
+
+        transpiled_job = SchedulingJob(transpiled_circuits, job.shots)
+        fidelity = anp.exp(anp.log(circuit_fidelities).mean())
+        return transpiled_job, float(fidelity)
+
+    @staticmethod
+    def _transpilation_worker_count(task_count: int) -> int:
+        configured = int(os.environ.get(
+            "QONDUCTOR_TRANSPILATION_WORKERS",
+            str(multiprocessing.cpu_count()),
+        ))
+        return min(task_count, max(1, configured))
+
+    def _cache_key(
+        self, job: SchedulingJob, backend: Backend,
+    ) -> tuple[Any, ...]:
+        return (
+            job.transpilation_cache_key,
+            id(backend),
+            self.transpilation_level.value,
+            self.transpilation_count,
+        )
+
+    def _cache_get(
+        self, key: tuple[Any, ...],
+    ) -> tuple[SchedulingJob, float] | None:
+        value = self._transpilation_cache.get(key)
+        if value is not None:
+            self._transpilation_cache.move_to_end(key)
+        return value
+
+    def _cache_put(
+        self,
+        key: tuple[Any, ...],
+        value: tuple[SchedulingJob, float],
+    ) -> int:
+        self._transpilation_cache[key] = value
+        self._transpilation_cache.move_to_end(key)
+        evictions = 0
+        while len(self._transpilation_cache) > self.transpilation_cache_size:
+            self._transpilation_cache.popitem(last=False)
+            evictions += 1
+        return evictions
+
+    @staticmethod
+    def _bind_cached_job(
+        template: SchedulingJob,
+        source: SchedulingJob,
+    ) -> SchedulingJob:
+        bindings = source.parameter_bindings
+        circuits = []
+        for circuit in template.circuits:
+            if not bindings:
+                circuits.append(circuit.copy())
+                continue
+
+            parameters = {
+                parameter.name: parameter for parameter in circuit.parameters
+            }
+            parameters.update({
+                str(parameter): parameter for parameter in circuit.parameters
+            })
+            assignments = {
+                parameter: float(value)
+                for name, value in bindings.items()
+                if (parameter := parameters.get(name)) is not None
+            }
+            if assignments:
+                circuits.append(
+                    circuit.assign_parameters(assignments, inplace=False)
+                )
+            else:
+                circuits.append(circuit.copy())
+        return SchedulingJob(circuits=circuits, shots=source.shots)
+
+    def _transpile_jobs_with_cache(
+        self,
+        jobs: list[SchedulingJob],
+        backends: list[Backend],
+    ) -> tuple[list[list[SchedulingJob | None]], anp.ndarray]:
+        requests = [
+            (job, backend, self._cache_key(job, backend))
+            for job in jobs
+            for backend in backends
+        ]
+        resolved: dict[
+            tuple[Any, ...], tuple[SchedulingJob, float] | None
+        ] = {}
+        misses: dict[tuple[Any, ...], tuple[SchedulingJob, Backend]] = {}
+        hits = 0
+        deduplicated = 0
+        evictions = 0
+
+        for job, backend, key in requests:
+            cached = self._cache_get(key)
+            if cached is not None:
+                resolved[key] = cached
+                hits += 1
+            elif key in misses:
+                deduplicated += 1
+            else:
+                misses[key] = (job, backend)
+
+        miss_items = list(misses.items())
+        tasks = [task for _, task in miss_items]
+        if tasks:
+            worker_count = self._transpilation_worker_count(len(tasks))
+            if worker_count == 1:
+                values = [
+                    self._transpile_job_backend(*task) for task in tasks
+                ]
+            else:
+                with multiprocessing.Pool(processes=worker_count) as pool:
+                    values = pool.starmap(
+                        self._transpile_job_backend,
+                        tasks,
+                    )
+
+            for (key, _), value in zip(miss_items, values):
+                transpiled_job, fidelity = value
+                if transpiled_job is None:
+                    resolved[key] = None
+                    continue
+                cached_value = (transpiled_job, fidelity)
+                evictions += self._cache_put(key, cached_value)
+                resolved[key] = cached_value
+
+        transpiled_jobs: list[list[SchedulingJob | None]] = []
+        fidelities = []
+        backend_count = len(backends)
+        for offset in range(0, len(requests), backend_count):
+            row_jobs: list[SchedulingJob | None] = []
+            row_fidelities = []
+            for source, _, key in requests[offset:offset + backend_count]:
+                cached_value = resolved.get(key)
+                if cached_value is None:
+                    row_jobs.append(None)
+                    row_fidelities.append(0.0)
+                    continue
+                template, fidelity = cached_value
+                row_jobs.append(self._bind_cached_job(template, source))
+                row_fidelities.append(fidelity)
+            transpiled_jobs.append(row_jobs)
+            fidelities.append(row_fidelities)
+
+        self._last_transpilation_cache_stats = {
+            "enabled": True,
+            "hits": hits,
+            "misses": len(misses),
+            "deduplicated": deduplicated,
+            "evictions": evictions,
+            "size": len(self._transpilation_cache),
+            "capacity": self.transpilation_cache_size,
+        }
+        logger.info(
+            "Transpilation cache: hits=%d misses=%d deduplicated=%d "
+            "evictions=%d size=%d/%d",
+            hits, len(misses), deduplicated, evictions,
+            len(self._transpilation_cache), self.transpilation_cache_size,
+        )
+        return transpiled_jobs, anp.array(fidelities)
 
 
     def _transpile_jobs(
@@ -784,6 +990,53 @@ class MultiObjectiveScheduler(BaseScheduler):
         :param backends: Quantum backends
         :return: The transpiled circuits and the fidelities
         """
+        if not jobs or not backends:
+            return [], anp.array([])
+
+        # Dynamic circuits use QPU-level transpilation. Flatten the matrix so
+        # a single-job batch can still transpile for several QPUs in parallel.
+        if self.transpilation_level == TranspilationLevel.QPU:
+            if (
+                self.transpilation_cache_enabled
+                and all(job.transpilation_cache_key for job in jobs)
+            ):
+                return self._transpile_jobs_with_cache(jobs, backends)
+
+            self._last_transpilation_cache_stats = {
+                "enabled": False,
+                "hits": 0,
+                "misses": 0,
+                "deduplicated": 0,
+                "evictions": 0,
+                "size": len(self._transpilation_cache),
+                "capacity": self.transpilation_cache_size,
+            }
+            tasks = [
+                (job, backend)
+                for job in jobs
+                for backend in backends
+            ]
+            worker_count = self._transpilation_worker_count(len(tasks))
+            if worker_count == 1:
+                values = [
+                    self._transpile_job_backend(*task) for task in tasks
+                ]
+            else:
+                with multiprocessing.Pool(processes=worker_count) as pool:
+                    values = pool.starmap(
+                        self._transpile_job_backend,
+                        tasks,
+                    )
+
+            backend_count = len(backends)
+            transpiled_jobs = []
+            fidelities = []
+            for offset in range(0, len(values), backend_count):
+                job_values = values[offset:offset + backend_count]
+                transpiled_jobs.append([value[0] for value in job_values])
+                fidelities.append([value[1] for value in job_values])
+            return transpiled_jobs, anp.array(fidelities)
+
         transpiled_jobs = []
         fidelities = []
         values = []
@@ -794,8 +1047,18 @@ class MultiObjectiveScheduler(BaseScheduler):
             for backend in backends
         }
 
-        with multiprocessing.Pool(processes=int(multiprocessing.cpu_count() / 2)) as pool:
-            values = pool.starmap(self._transpile_job, [(job, backends, processor_types) for job in jobs])
+        worker_count = self._transpilation_worker_count(len(jobs))
+        if worker_count == 1:
+            values = [
+                self._transpile_job(job, backends, processor_types)
+                for job in jobs
+            ]
+        else:
+            with multiprocessing.Pool(processes=worker_count) as pool:
+                values = pool.starmap(
+                    self._transpile_job,
+                    [(job, backends, processor_types) for job in jobs],
+                )
      
         for v in values:
             transpiled_jobs.append(v[0])
@@ -927,12 +1190,25 @@ class MultiObjectiveScheduler(BaseScheduler):
         :param backends: Quantum backends
         :return: The execution times
         """
-        execution_times = []
+        tasks = [
+            (job, backends, self.estimator)
+            for job in jobs
+        ]
+        worker_count = self._transpilation_worker_count(len(tasks))
+        if worker_count == 1:
+            execution_times = [
+                calculate_exeucution_time(*task) for task in tasks
+            ]
+        else:
+            # The parent already holds the full transpiled job/backend matrix.
+            # Threads keep that data shared instead of forking and serializing
+            # it into a second process pool at peak memory usage.
+            with ThreadPool(worker_count) as pool:
+                execution_times = pool.starmap(
+                    calculate_exeucution_time,
+                    tasks,
+                )
 
-        # Calculate the execution time for each job
-        with multiprocessing.Pool(processes=int(multiprocessing.cpu_count() / 2)) as pool:
-            execution_times = pool.starmap(calculate_exeucution_time, [(job, backends, self.estimator) for job in jobs])
-       
         return anp.array(execution_times)
 
     def _calculate_backend_queue_waiting_times(

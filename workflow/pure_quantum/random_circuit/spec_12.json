@@ -2,7 +2,7 @@
   "version": 2,
   "qnode": "12",
   "circuits": {
-    "random_indep_qiskit_12": "random_indep_qiskit_12.qasm"
+    "random_indep_qiskit_12": "random_indep_qiskit_12.qasm3"
   },
   "hybrid_job": false
 }

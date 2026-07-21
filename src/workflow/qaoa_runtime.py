@@ -13,13 +13,19 @@ import json
 import math
 import os
 import random
-import re
 import time
 import uuid
 from typing import Any
 
-from src.operator.k8s_client import K8sClient, QUANTUM_JOB_PLURAL
+from src.operator.k8s_client import (
+    K8sClient,
+    QUANTUM_JOB_PLURAL,
+    _resource_hash,
+    _rfc1123_name,
+)
 from src.utils.logging_config import configure_logging
+
+DEFAULT_QUANTUM_TIMEOUT_SECONDS = 21600.0
 
 DEFAULT_QAOA_EDGES: tuple[tuple[int, int], ...] = (
     (0, 1), (0, 4), (0, 5), (0, 6), (0, 8), (0, 9),
@@ -32,15 +38,6 @@ DEFAULT_QAOA_EDGES: tuple[tuple[int, int], ...] = (
     (7, 9), (7, 10),
     (8, 9), (8, 10), (8, 11),
 )
-
-
-def _rfc1123_name(*parts: str, max_length: int = 63) -> str:
-    raw = "-".join(str(part) for part in parts if part)
-    name = re.sub(r"[^a-z0-9.-]+", "-", raw.lower())
-    name = re.sub(r"-+", "-", name).strip("-.")
-    if not name:
-        name = "qonductor"
-    return name[:max_length].rstrip("-.") or "qonductor"
 
 
 def initialize_parameters(count: int) -> list[float]:
@@ -121,7 +118,13 @@ def submit_quantum_eval(
     eval_label: str,
     namespace: str = "default",
 ) -> dict:
-    name = _rfc1123_name("qj", step_id, str(iteration), eval_label, uuid.uuid4().hex[:5])
+    name = _rfc1123_name(
+        "qj",
+        step_id,
+        str(iteration),
+        eval_label,
+        f"{_resource_hash(workflow_ref)}-{uuid.uuid4().hex[:12]}",
+    )
     body = {
         "apiVersion": "qonductor.io/v1",
         "kind": "QuantumJob",
@@ -160,7 +163,7 @@ def wait_for_quantum_result(
     client: K8sClient,
     name: str,
     *,
-    timeout_s: float = 900.0,
+    timeout_s: float = DEFAULT_QUANTUM_TIMEOUT_SECONDS,
     poll_s: float = 2.0,
 ) -> dict:
     deadline = time.monotonic() + timeout_s
@@ -216,7 +219,7 @@ def run_qaoa_spsa_driver(
     max_iterations = int(os.environ.get("R1_ITERATIONS", cfg.get("maxIterations", 200)))
     priority = cfg.get("priority", "balanced")
     edges = cfg.get("edges") or [list(edge) for edge in DEFAULT_QAOA_EDGES]
-    timeout_s = float(cfg.get("quantumTimeoutSeconds", 900.0))
+    timeout_s = float(cfg.get("quantumTimeoutSeconds", DEFAULT_QUANTUM_TIMEOUT_SECONDS))
     poll_s = float(cfg.get("pollSeconds", 2.0))
 
     if not parameter_names:

@@ -321,10 +321,10 @@ def create_metrics_server(
 def start_metrics_server(
     k8s_client: K8sClient,
     port: int = METRICS_PORT,
-) -> threading.Thread:
+) -> tuple[HTTPServer, threading.Thread]:
     """Start the metrics HTTP server in a daemon thread.
 
-    Returns the thread so callers can ``join()`` if needed.
+    Returns the server and thread so callers can shut down cleanly.
     """
     server = create_metrics_server(k8s_client, port)
 
@@ -337,4 +337,4 @@ def start_metrics_server(
 
     thread = threading.Thread(target=_serve, daemon=True, name="metrics")
     thread.start()
-    return thread
+    return server, thread

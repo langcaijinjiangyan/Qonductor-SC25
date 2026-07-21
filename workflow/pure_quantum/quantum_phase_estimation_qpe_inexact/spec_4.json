@@ -2,7 +2,7 @@
   "version": 2,
   "qnode": "4",
   "circuits": {
-    "qpeinexact_indep_qiskit_4": "qpeinexact_indep_qiskit_4.qasm"
+    "qpeinexact_indep_qiskit_4": "qpeinexact_indep_qiskit_4.qasm3"
   },
   "hybrid_job": false
 }

@@ -1,0 +1,104 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-011-pure-quantum-deutsch-jozsa-4-20260720174330-9327c23
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: deutsch-jozsa
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 7101c9d513a3
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: dj_indep_qiskit_4
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa/dj_indep_qiskit_4.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-17
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[4] q;
+
+        bit[3] c;
+
+        rz(-pi/2) q[0];
+
+        sx q[0];
+
+        rz(pi) q[0];
+
+        rz(-pi/2) q[1];
+
+        sx q[1];
+
+        rz(pi) q[1];
+
+        rz(pi/2) q[2];
+
+        sx q[2];
+
+        rz(pi) q[2];
+
+        rz(pi/2) q[3];
+
+        sx q[3];
+
+        rz(-pi/2) q[3];
+
+        cx q[0],q[3];
+
+        sx q[0];
+
+        rz(-pi/2) q[0];
+
+        cx q[1],q[3];
+
+        sx q[1];
+
+        rz(-pi/2) q[1];
+
+        cx q[2],q[3];
+
+        sx q[2];
+
+        rz(pi/2) q[2];
+
+        barrier q[0],q[1],q[2],q[3];
+
+        c[0] = measure q[0];
+
+        c[1] = measure q[1];
+
+        c[2] = measure q[2];
+
+        '
+      circuitFormat: qasm3
+      qubits: 4
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/deutsch_jozsa/spec_4.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa/spec_4.json

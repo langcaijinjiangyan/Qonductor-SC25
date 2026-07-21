@@ -1,21 +1,21 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: deutsch-jozsa-dj-indep-qiskit-12
+  name: cov-007-pure-quantum-deutsch-jozsa-12-20260720174330-1c5ab45
   namespace: default
   labels:
     app: qonductor
     algorithm: deutsch-jozsa
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: ca2f9b9249eb
+  workflowImageRef: f97bb0095cef
   priority: balanced
   maxRetries: 3
   containers: []
   scheduling:
     classicalPolicy: FilterScore
     quantumPolicy: NSGA2
-    schedulingInterval: 120
+    schedulingInterval: 30
     schedulingThreshold: 1
   errorMitigation:
     enabled: false
@@ -23,7 +23,7 @@ spec:
   workflowInputs:
     quantum:
       logicalCircuitId: dj_indep_qiskit_12
-      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa/dj_indep_qiskit_12.qasm
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/deutsch_jozsa/dj_indep_qiskit_12.qasm3
       circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-17
 
         // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
@@ -35,13 +35,13 @@ spec:
         // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
 
 
-        OPENQASM 2.0;
+        OPENQASM 3.0;
 
-        include "qelib1.inc";
+        include "stdgates.inc";
 
-        qreg q[12];
+        qubit[12] q;
 
-        creg c[11];
+        bit[11] c;
 
         rz(-pi/2) q[0];
 
@@ -183,28 +183,30 @@ spec:
 
         barrier q[0],q[1],q[2],q[3],q[4],q[5],q[6],q[7],q[8],q[9],q[10],q[11];
 
-        measure q[0] -> c[0];
+        c[0] = measure q[0];
 
-        measure q[1] -> c[1];
+        c[1] = measure q[1];
 
-        measure q[2] -> c[2];
+        c[2] = measure q[2];
 
-        measure q[3] -> c[3];
+        c[3] = measure q[3];
 
-        measure q[4] -> c[4];
+        c[4] = measure q[4];
 
-        measure q[5] -> c[5];
+        c[5] = measure q[5];
 
-        measure q[6] -> c[6];
+        c[6] = measure q[6];
 
-        measure q[7] -> c[7];
+        c[7] = measure q[7];
 
-        measure q[8] -> c[8];
+        c[8] = measure q[8];
 
-        measure q[9] -> c[9];
+        c[9] = measure q[9];
 
-        measure q[10] -> c[10];'
-      circuitFormat: qasm2
+        c[10] = measure q[10];
+
+        '
+      circuitFormat: qasm3
       qubits: 12
       shots: 128
       priority: balanced

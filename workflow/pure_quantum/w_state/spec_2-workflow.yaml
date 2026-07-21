@@ -1,0 +1,78 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-060-pure-quantum-w-state-2-20260720174330-c9def8a
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: w-state
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 033642abdf2f
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: wstate_indep_qiskit_2
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/w_state/wstate_indep_qiskit_2.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-19
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[2] q;
+
+        bit[2] meas;
+
+        sx q[0];
+
+        rz(pi/4) q[0];
+
+        sx q[0];
+
+        x q[1];
+
+        cx q[1],q[0];
+
+        sx q[0];
+
+        rz(pi/4) q[0];
+
+        sx q[0];
+
+        cx q[0],q[1];
+
+        barrier q[0],q[1];
+
+        meas[0] = measure q[0];
+
+        meas[1] = measure q[1];
+
+        '
+      circuitFormat: qasm3
+      qubits: 2
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/w_state/spec_2.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/w_state
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/w_state/spec_2.json

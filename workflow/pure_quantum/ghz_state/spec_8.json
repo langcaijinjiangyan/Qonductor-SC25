@@ -2,7 +2,7 @@
   "version": 2,
   "qnode": "8",
   "circuits": {
-    "ghz_indep_qiskit_8": "ghz_indep_qiskit_8.qasm"
+    "ghz_indep_qiskit_8": "ghz_indep_qiskit_8.qasm3"
   },
   "hybrid_job": false
 }

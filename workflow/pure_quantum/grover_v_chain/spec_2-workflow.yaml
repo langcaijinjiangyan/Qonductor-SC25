@@ -1,0 +1,70 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-025-pure-quantum-grover-v-chain-2-20260720174330-877a44d
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: grover-v-chain
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 290291f5ea5e
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: grover-v-chain_indep_qiskit_2
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/grover_v_chain/grover-v-chain_indep_qiskit_2.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-19
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[1] q;
+
+        qubit[1] flag;
+
+        bit[2] meas;
+
+        rz(pi/2) q[0];
+
+        sx q[0];
+
+        rz(pi/2) q[0];
+
+        x flag[0];
+
+        barrier q[0],flag[0];
+
+        meas[0] = measure q[0];
+
+        meas[1] = measure flag[0];
+
+        '
+      circuitFormat: qasm3
+      qubits: 2
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/grover_v_chain/spec_2.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/grover_v_chain
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/grover_v_chain/spec_2.json

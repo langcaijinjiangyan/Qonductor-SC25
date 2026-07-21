@@ -15,7 +15,10 @@ import logging
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Optional
+
+import yaml
 
 from src.operator.k8s_client import (
     HYBRID_WORKFLOW_PLURAL,
@@ -60,10 +63,15 @@ class HybridWorkflowController:
         self._active: dict[str, dict[str, Any]] = {}
         # Track child job completions for status reconciliation.
         self._child_jobs: dict[str, dict[str, str]] = {}
-        # Quantum steps pending execution completion (step_id → metadata).
-        self._pending_quantum: dict[str, dict[str, Any]] = {}
+        # Quantum state is scoped by workflow because DAG step IDs are reused.
+        self._pending_quantum: dict[tuple[str, str], dict[str, Any]] = {}
         # Quantum steps whose K8s Job has finished.
-        self._completed_quantum_steps: set[str] = set()
+        self._completed_quantum_steps: set[tuple[str, str]] = set()
+        self._failed_quantum_steps: dict[tuple[str, str], str] = {}
+        self._quantum_condition = threading.Condition()
+        # Job state is populated by one cluster-wide watch stream.
+        self._job_condition = threading.Condition()
+        self._job_statuses: dict[str, dict[str, Any]] = {}
         # Callbacks for local-mode simulation.
         self._run_callbacks: dict[str, dict] = {}
 
@@ -74,30 +82,44 @@ class HybridWorkflowController:
     def run(self) -> None:
         """Start the controller loop. Blocks until Ctrl+C or stop()."""
         logger.info("HybridWorkflowController starting (mode=%s)", self.mode)
-        watcher = self.k8s.watch_cr(HYBRID_WORKFLOW_PLURAL)
+        job_watch_thread = threading.Thread(
+            target=self._watch_jobs,
+            name="qonductor-job-watch",
+            daemon=True,
+        )
+        job_watch_thread.start()
 
-        for event in watcher:
-            if self._stop_event.is_set():
-                break
-            ev_type = event.get("type", "")
-            obj = event.get("object", {})
-            name = obj.get("metadata", {}).get("name", "")
+        try:
+            watcher = self.k8s.watch_cr(HYBRID_WORKFLOW_PLURAL)
+            for event in watcher:
+                if self._stop_event.is_set():
+                    break
+                ev_type = event.get("type", "")
+                obj = event.get("object", {})
+                name = obj.get("metadata", {}).get("name", "")
 
-            if ev_type == "ADDED":
-                phase = obj.get("status", {}).get("phase", "")
-                if phase in ("", "Pending"):
-                    logger.info("New HybridWorkflow: %s", name)
-                    self._handle_create(obj)
-            elif ev_type == "MODIFIED":
-                self._reconcile_status(obj)
-            elif ev_type == "DELETED":
-                logger.info("HybridWorkflow deleted: %s", name)
-                self._active.pop(name, None)
+                if ev_type == "ADDED":
+                    phase = obj.get("status", {}).get("phase", "")
+                    if phase in ("", "Pending"):
+                        logger.info("New HybridWorkflow: %s", name)
+                        self._handle_create(obj)
+                elif ev_type == "MODIFIED":
+                    self._reconcile_status(obj)
+                elif ev_type == "DELETED":
+                    logger.info("HybridWorkflow deleted: %s", name)
+                    self._active.pop(name, None)
+        finally:
+            self.stop()
+            job_watch_thread.join(timeout=1.0)
 
         logger.info("HybridWorkflowController stopped")
 
     def stop(self) -> None:
         self._stop_event.set()
+        with self._job_condition:
+            self._job_condition.notify_all()
+        with self._quantum_condition:
+            self._quantum_condition.notify_all()
 
     def process_workflow(self, image_id: str,
                          inputs: dict | None = None) -> str:
@@ -126,11 +148,14 @@ class HybridWorkflowController:
             "status": {"phase": "Pending", "stepsCompleted": 0, "totalSteps": 0},
         })
 
+        cr_name = cr["metadata"]["name"]
         # 2. Execute.
-        result = self._execute_workflow(image_id, inputs, cr, run_id)
+        try:
+            result = self._execute_workflow(image_id, inputs, cr, run_id)
+        finally:
+            self._release_workflow_quantum_state(cr_name)
 
         # 3. Update CR status.
-        cr_name = cr["metadata"]["name"]
         self.k8s.update_cr_status(HYBRID_WORKFLOW_PLURAL, cr_name, {
             "phase": result["phase"],
             "stepsCompleted": result["steps_completed"],
@@ -167,12 +192,66 @@ class HybridWorkflowController:
 
         # Execute in a background thread so the watch loop continues.
         t = threading.Thread(
-            target=self._execute_workflow,
+            target=self._run_workflow,
             args=(image_id, inputs, cr, run_id),
+            name=f"workflow-{cr_name}",
             daemon=True,
         )
         t.start()
         return run_id
+
+    def _run_workflow(
+        self, image_id: str, inputs: dict, cr: dict, run_id: str,
+    ) -> None:
+        """Execute a watched workflow and always release its controller state."""
+        cr_name = cr["metadata"]["name"]
+        try:
+            self._execute_workflow(image_id, inputs, cr, run_id)
+        except Exception as exc:
+            logger.exception("Workflow %s terminated unexpectedly", cr_name)
+            try:
+                self.k8s.update_cr_status(HYBRID_WORKFLOW_PLURAL, cr_name, {
+                    "phase": "Failed",
+                    "conditions": [{
+                        "type": "ControllerError",
+                        "status": "True",
+                        "reason": str(exc),
+                        "lastTransitionTime": _now_iso(),
+                    }],
+                })
+            except Exception:
+                logger.exception(
+                    "Failed to record controller error for workflow %s",
+                    cr_name,
+                )
+        finally:
+            self._active.pop(cr_name, None)
+            self._release_workflow_quantum_state(cr_name)
+
+    def _release_workflow_quantum_state(self, workflow_name: str) -> None:
+        """Release transient quantum state owned by one workflow."""
+        with self._quantum_condition:
+            pending_keys = {
+                key for key in self._pending_quantum
+                if key[0] == workflow_name
+            }
+            for key in pending_keys:
+                self._pending_quantum.pop(key, None)
+            self._completed_quantum_steps = {
+                key for key in self._completed_quantum_steps
+                if key[0] != workflow_name
+            }
+            self._failed_quantum_steps = {
+                key: reason
+                for key, reason in self._failed_quantum_steps.items()
+                if key[0] != workflow_name
+            }
+            self._quantum_condition.notify_all()
+
+        for child_name, info in list(self._child_jobs.items()):
+            if (info.get("type") == "quantum" and
+                    info.get("workflow_ref") == workflow_name):
+                self._child_jobs.pop(child_name, None)
 
     def _execute_workflow(
         self, image_id: str, inputs: dict, cr: dict, run_id: str,
@@ -236,7 +315,14 @@ class HybridWorkflowController:
                 break
 
             # Dispatch ready nodes to the appropriate scheduler.
+            waiting_for_quantum = False
             for node in ready:
+                quantum_key = (cr_name, node.step_id)
+                if node.step_type == StepType.QUANTUM:
+                    with self._quantum_condition:
+                        if quantum_key in self._pending_quantum:
+                            waiting_for_quantum = True
+                            continue
                 try:
                     if node.step_type == StepType.CLASSICAL:
                         step_result = self._dispatch_classical(node, cr)
@@ -244,6 +330,7 @@ class HybridWorkflowController:
                         step_index += 1
                     else:
                         step_result = self._dispatch_quantum(node, cr)
+                        waiting_for_quantum = True
                         # Quantum steps: submitted to NSGA-II → K8s Job;
                         # completion is tracked via _completed_quantum_steps.
                 except Exception as exc:
@@ -266,19 +353,50 @@ class HybridWorkflowController:
                 if first_error:
                     break  # Stop on first error (can be relaxed with maxRetries).
 
+            # Poll execution Jobs while this workflow waits. Parent CR events
+            # alone are not sufficient because QuantumJob updates do not
+            # modify the HybridWorkflow resource.
+            if waiting_for_quantum:
+                self._reconcile_status(cr)
+
             # ---- Admit completed quantum steps into the DAG frontier -----
-            newly_done = self._completed_quantum_steps & set(
-                self._pending_quantum
-            )
-            for step_id in newly_done:
-                if step_id not in completed:
+            with self._quantum_condition:
+                newly_done = {
+                    key for key in self._completed_quantum_steps
+                    if key[0] == cr_name and key in self._pending_quantum
+                }
+                newly_failed = {
+                    key: reason
+                    for key, reason in self._failed_quantum_steps.items()
+                    if key[0] == cr_name and key in self._pending_quantum
+                }
+                for key in newly_done:
+                    step_id = key[1]
+                    if step_id not in completed:
+                        completed.add(step_id)
+                        step_index += 1
+                    self._pending_quantum.pop(key, None)
+                    self._completed_quantum_steps.discard(key)
+                for key, reason in newly_failed.items():
+                    step_id = key[1]
                     completed.add(step_id)
                     step_index += 1
-                self._pending_quantum.pop(step_id, None)
-            self._completed_quantum_steps.difference_update(newly_done)
+                    results[step_id] = {
+                        "status": "failed",
+                        "error": reason,
+                    }
+                    self._pending_quantum.pop(key, None)
+                    self._failed_quantum_steps.pop(key, None)
+                    if first_error is None:
+                        first_error = reason
 
             if first_error:
                 break
+            if waiting_for_quantum and not newly_done:
+                with self._quantum_condition:
+                    self._quantum_condition.wait(
+                        timeout=self.RECONCILE_INTERVAL,
+                    )
 
         # ---- Aggregate quantum job metrics for the workflow ----------
         if first_error is None:
@@ -406,26 +524,35 @@ class HybridWorkflowController:
             "step_id": node.step_id,
             "type": "classical",
         }
+        try:
+            if self.k8s.mode == "local":
+                result = self._simulate_classical_execution(node)
+                job = self.k8s._store.get("jobs", job_name)
+                if job:
+                    job["status"] = {"succeeded": 1, "active": 0, "failed": 0}
+                    self.k8s._store.crs[f"jobs/{job_name}"] = job
+                return result
 
-        # Simulate job completion for local mode, including k8s requests that
-        # were downgraded by K8sClient because no cluster is reachable.
-        if self.k8s.mode == "local":
-            result = self._simulate_classical_execution(node)
-            # Mark job as succeeded in the local store.
-            job = self.k8s._store.get("jobs", job_name)
-            if job:
-                job["status"] = {"succeeded": 1, "active": 0, "failed": 0}
-                self.k8s._store.crs[f"jobs/{job_name}"] = job
-            return result
-
-        return self._wait_for_classical_job(job_name, node)
+            # Cover the narrow race where the Job completes before the watch
+            # observes it after registration in _child_jobs.
+            current_status = self.k8s.get_job_status(job_name) or {}
+            if current_status.get("succeeded") or current_status.get("failed"):
+                with self._job_condition:
+                    self._job_statuses[job_name] = current_status
+                    self._job_condition.notify_all()
+            return self._wait_for_classical_job(job_name, node)
+        finally:
+            self._child_jobs.pop(job_name, None)
+            with self._job_condition:
+                self._job_statuses.pop(job_name, None)
 
     def _wait_for_classical_job(self, job_name: str, node: DAGNode) -> dict:
-        """Block until a K8s classical Job succeeds or fails."""
-        while not self._stop_event.is_set():
-            status = self.k8s.get_job_status(job_name)
-            if status:
+        """Block on the centralized Job watch until completion or failure."""
+        with self._job_condition:
+            while not self._stop_event.is_set():
+                status = self._job_statuses.get(job_name, {})
                 if status.get("succeeded"):
+                    self._job_statuses.pop(job_name, None)
                     return {
                         "step_id": node.step_id,
                         "label": node.label,
@@ -433,11 +560,48 @@ class HybridWorkflowController:
                         "status": "completed",
                     }
                 if status.get("failed"):
+                    self._job_statuses.pop(job_name, None)
                     raise RuntimeError(
-                        f"Classical Job {job_name!r} failed for step {node.step_id!r}"
+                        f"Classical Job {job_name!r} failed for step "
+                        f"{node.step_id!r}"
                     )
-            time.sleep(self.RECONCILE_INTERVAL)
+                if status.get("deleted"):
+                    self._job_statuses.pop(job_name, None)
+                    raise RuntimeError(
+                        f"Classical Job {job_name!r} was deleted before "
+                        f"step {node.step_id!r} completed"
+                    )
+                self._job_condition.wait()
         raise RuntimeError(f"Stopped while waiting for classical Job {job_name!r}")
+
+    def _watch_jobs(self) -> None:
+        """Maintain Job status from one Kubernetes watch connection."""
+        logger.info("Centralized Job watch starting")
+        for event in self.k8s.watch_jobs(
+            label_selector="app=qonductor,step_type=classical",
+        ):
+            if self._stop_event.is_set():
+                break
+            if event.get("type") == "HEARTBEAT":
+                continue
+
+            job = event.get("object", {})
+            job_name = job.get("metadata", {}).get("name", "")
+            if not job_name:
+                continue
+
+            # Ignore terminal Jobs left from previous controller runs. Their
+            # workflow threads are not waiting for these events.
+            if job_name not in self._child_jobs:
+                continue
+
+            status = dict(job.get("status", {}) or {})
+            if event.get("type") == "DELETED":
+                status["deleted"] = True
+            with self._job_condition:
+                self._job_statuses[job_name] = status
+                self._job_condition.notify_all()
+        logger.info("Centralized Job watch stopped")
 
     def _dispatch_quantum(self, node: DAGNode, cr: dict) -> dict:
         """Dispatch a QUANTUM DAG node.
@@ -453,6 +617,22 @@ class HybridWorkflowController:
             node, cr, mode=self.mode, client_override=self.k8s,
         )
         qj_name = qj["metadata"]["name"]
+        workflow_name = cr["metadata"]["name"]
+        quantum_key = (workflow_name, node.step_id)
+
+        # Register before invoking callbacks so even immediate local-mode
+        # completion cannot race ahead of the pending state.
+        self._child_jobs[qj_name] = {
+            "step_id": node.step_id,
+            "type": "quantum",
+            "cr_name": qj_name,
+            "workflow_ref": workflow_name,
+        }
+        with self._quantum_condition:
+            self._pending_quantum[quantum_key] = {
+                "quantum_job": qj_name,
+                "qubits": node.resource_requirements.get("qubits"),
+            }
 
         # If a quantum scheduler callback is registered, invoke it.
         cb = self._run_callbacks.get("quantum_scheduler")
@@ -466,18 +646,9 @@ class HybridWorkflowController:
                 "phase": "Completed",
                 "result": {"simulated": True},
             })
-            self._completed_quantum_steps.add(node.step_id)
-
-        # Track for later status reconciliation (K8s Job polling).
-        self._child_jobs[qj_name] = {
-            "step_id": node.step_id,
-            "type": "quantum",
-            "cr_name": qj_name,
-        }
-        self._pending_quantum[node.step_id] = {
-            "quantum_job": qj_name,
-            "qubits": node.resource_requirements.get("qubits"),
-        }
+            with self._quantum_condition:
+                self._completed_quantum_steps.add(quantum_key)
+                self._quantum_condition.notify_all()
 
         return {
             "quantum_job": qj_name,
@@ -500,9 +671,11 @@ class HybridWorkflowController:
         cr_name = cr["metadata"]["name"]
 
         for child_name, info in list(self._child_jobs.items()):
-            if info.get("type") != "quantum":
+            if (info.get("type") != "quantum" or
+                    info.get("workflow_ref") != cr_name):
                 continue
             step_id = info["step_id"]
+            quantum_key = (cr_name, step_id)
 
             # Try polling QuantumJob CR for execution status
             qj = self.k8s.get_cr(QUANTUM_JOB_PLURAL, child_name)
@@ -521,9 +694,10 @@ class HybridWorkflowController:
                             QUANTUM_JOB_PLURAL, child_name,
                             {"phase": "Completed"},
                         )
-                        self._completed_quantum_steps.add(step_id)
                         self._child_jobs.pop(child_name, None)
-                        self._pending_quantum.pop(step_id, None)
+                        with self._quantum_condition:
+                            self._completed_quantum_steps.add(quantum_key)
+                            self._quantum_condition.notify_all()
                         logger.info(
                             "Quantum step '%s' completed → "
                             "unblocking DAG for workflow '%s'",
@@ -534,13 +708,37 @@ class HybridWorkflowController:
                             "Quantum execution Job '%s' failed for step '%s'",
                             execution_job_name, step_id,
                         )
+                        try:
+                            self.k8s.update_cr_status(
+                                QUANTUM_JOB_PLURAL, child_name,
+                                {"phase": "Failed"},
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to mark QuantumJob %s as failed",
+                                child_name,
+                            )
                         self._child_jobs.pop(child_name, None)
+                        with self._quantum_condition:
+                            self._failed_quantum_steps[quantum_key] = (
+                                f"Quantum execution Job {execution_job_name!r} "
+                                f"failed for step {step_id!r}"
+                            )
+                            self._quantum_condition.notify_all()
 
             elif qj_phase == "Completed":
                 # Already completed in a previous reconciliation pass
-                self._completed_quantum_steps.add(step_id)
                 self._child_jobs.pop(child_name, None)
-                self._pending_quantum.pop(step_id, None)
+                with self._quantum_condition:
+                    self._completed_quantum_steps.add(quantum_key)
+                    self._quantum_condition.notify_all()
+            elif qj_phase in ("Failed", "Cancelled"):
+                self._child_jobs.pop(child_name, None)
+                with self._quantum_condition:
+                    self._failed_quantum_steps[quantum_key] = (
+                        f"QuantumJob {child_name!r} entered phase {qj_phase}"
+                    )
+                    self._quantum_condition.notify_all()
 
     # ------------------------------------------------------------------
     # Local simulation helpers
@@ -568,6 +766,75 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _load_operator_config(config_path: str) -> dict[str, Any]:
+    """Load and validate the operator's mounted YAML configuration."""
+    if not config_path:
+        return {}
+
+    path = Path(config_path)
+    if not path.is_file():
+        raise RuntimeError(
+            f"QONDUCTOR_CONFIG points to missing file: {config_path}"
+        )
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise RuntimeError(
+            f"Cannot load operator configuration {config_path}: {exc}"
+        ) from exc
+    if loaded is None:
+        loaded = {}
+    if not isinstance(loaded, dict):
+        raise RuntimeError(
+            f"Operator configuration {config_path} must contain a YAML mapping"
+        )
+    logger.info(
+        "Loaded operator configuration from %s (%d settings)",
+        config_path,
+        len(loaded),
+    )
+    return loaded
+
+
+def _positive_int_config(
+    config: dict[str, Any], env_name: str, config_key: str, default: int,
+) -> int:
+    """Read a positive integer with environment-over-ConfigMap precedence."""
+    import os
+
+    raw = os.environ.get(env_name, config.get(config_key, default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            f"{env_name}/{config_key} must be an integer, got {raw!r}"
+        ) from exc
+    if value < 1:
+        raise RuntimeError(
+            f"{env_name}/{config_key} must be at least 1, got {value}"
+        )
+    return value
+
+
+def _bool_config(
+    config: dict[str, Any], env_name: str, config_key: str, default: bool,
+) -> bool:
+    """Read a boolean with environment-over-ConfigMap precedence."""
+    import os
+
+    raw = os.environ.get(env_name, config.get(config_key, default))
+    if isinstance(raw, bool):
+        return raw
+    normalized = str(raw).strip().lower()
+    if normalized in ("1", "true", "yes", "on"):
+        return True
+    if normalized in ("0", "false", "no", "off"):
+        return False
+    raise RuntimeError(
+        f"{env_name}/{config_key} must be a boolean, got {raw!r}"
+    )
+
+
 # ===================================================================
 # Module entry point used by docker/Dockerfile.operator
 # ===================================================================
@@ -583,16 +850,60 @@ def main() -> None:
 
     configure_logging()
 
+    operator_config = _load_operator_config(
+        os.environ.get("QONDUCTOR_CONFIG", ""),
+    )
     mode = os.environ.get("QONDUCTOR_MODE", "local")
-    registry_root = os.environ.get("QONDUCTOR_REGISTRY_ROOT", "data/workflow_registry")
-    scheduling_interval = int(os.environ.get("QONDUCTOR_SCHEDULING_INTERVAL", "30"))
-    scheduling_threshold = int(os.environ.get("QONDUCTOR_SCHEDULING_THRESHOLD", "10"))
-    metrics_port = int(os.environ.get("QONDUCTOR_METRICS_PORT", "9100"))
+    registry_root = os.environ.get(
+        "QONDUCTOR_REGISTRY_ROOT",
+        str(operator_config.get("registry-root", "data/workflow_registry")),
+    )
+    scheduling_interval = _positive_int_config(
+        operator_config,
+        "QONDUCTOR_SCHEDULING_INTERVAL",
+        "scheduling-interval",
+        30,
+    )
+    scheduling_threshold = _positive_int_config(
+        operator_config,
+        "QONDUCTOR_SCHEDULING_THRESHOLD",
+        "scheduling-threshold",
+        10,
+    )
+    transpilation_workers = _positive_int_config(
+        operator_config,
+        "QONDUCTOR_TRANSPILATION_WORKERS",
+        "transpilation-workers",
+        1,
+    )
+    os.environ["QONDUCTOR_TRANSPILATION_WORKERS"] = str(
+        transpilation_workers
+    )
+    transpilation_cache_enabled = _bool_config(
+        operator_config,
+        "QONDUCTOR_TRANSPILATION_CACHE_ENABLED",
+        "transpilation-cache-enabled",
+        True,
+    )
+    transpilation_cache_size = _positive_int_config(
+        operator_config,
+        "QONDUCTOR_TRANSPILATION_CACHE_SIZE",
+        "transpilation-cache-size",
+        256,
+    )
+    metrics_port = _positive_int_config(
+        operator_config,
+        "QONDUCTOR_METRICS_PORT",
+        "metrics-port",
+        9100,
+    )
 
     quantum_controller = QuantumSchedulerController(
         mode=mode,
         scheduling_interval=scheduling_interval,
         scheduling_threshold=scheduling_threshold,
+        transpilation_cache_enabled=transpilation_cache_enabled,
+        transpilation_cache_size=transpilation_cache_size,
     )
     quantum_thread = threading.Thread(
         target=quantum_controller.run,
@@ -617,7 +928,10 @@ def main() -> None:
     )
 
     # Start the embedded metrics HTTP server
-    start_metrics_server(workflow_controller.k8s, port=metrics_port)
+    metrics_server, metrics_thread = start_metrics_server(
+        workflow_controller.k8s,
+        port=metrics_port,
+    )
 
     try:
         workflow_controller.run()
@@ -625,8 +939,11 @@ def main() -> None:
         workflow_controller.stop()
         quantum_controller.stop()
         queue_controller.stop()
+        metrics_server.shutdown()
+        metrics_server.server_close()
         quantum_thread.join(timeout=5)
         queue_thread.join(timeout=5)
+        metrics_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

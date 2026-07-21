@@ -16,17 +16,28 @@ class SchedulingJob:
     circuits: list[QuantumCircuit]
     shots: int = 4000
     id: uuid.UUID = field(default_factory=uuid.uuid4, init=False)
+    transpilation_cache_key: str = ""
+    parameter_bindings: dict[str, float] = field(default_factory=dict)
 
     def __json__(self):
         return {
             'circuits': self.circuits,
             'shots': self.shots,
-            'id': self.id
+            'id': self.id,
+            'transpilation_cache_key': self.transpilation_cache_key,
+            'parameter_bindings': self.parameter_bindings,
         }
     
     @classmethod
     def __json_decode__(cls, json_data):
-        return cls(json_data['circuits'], json_data['shots'], json_data['id'])
+        return cls(
+            circuits=json_data['circuits'],
+            shots=json_data['shots'],
+            transpilation_cache_key=json_data.get(
+                'transpilation_cache_key', ''
+            ),
+            parameter_bindings=json_data.get('parameter_bindings', {}),
+        )
 
 
 Assignment: TypeAlias = tuple[SchedulingJob, Backend]

@@ -1,0 +1,100 @@
+apiVersion: qonductor.io/v1
+kind: HybridWorkflow
+metadata:
+  name: cov-003-pure-quantum-amplitude-estimation-ae-2-20260720174330-2
+  namespace: default
+  labels:
+    app: qonductor
+    algorithm: amplitude-estimation-ae
+    converted_from: qslurm_workloads
+spec:
+  workflowImageRef: 5bd9058ec3e1
+  priority: balanced
+  maxRetries: 3
+  containers: []
+  scheduling:
+    classicalPolicy: FilterScore
+    quantumPolicy: NSGA2
+    schedulingInterval: 30
+    schedulingThreshold: 1
+  errorMitigation:
+    enabled: false
+    stackedTechniques: []
+  workflowInputs:
+    quantum:
+      logicalCircuitId: ae_indep_qiskit_2
+      qasmPath: /home/reol/Qonductor-SC25/workflow/pure_quantum/amplitude_estimation_ae/ae_indep_qiskit_2.qasm3
+      circuitQasm: '// Benchmark was created by MQT Bench on 2024-03-17
+
+        // For more information about MQT Bench, please visit https://www.cda.cit.tum.de/mqtbench/
+
+        // MQT Bench version: 1.1.0
+
+        // Qiskit version: 1.0.2
+
+        // Used Gate Set: [''id'', ''rz'', ''sx'', ''x'', ''cx'', ''measure'', ''barrier'']
+
+
+        OPENQASM 3.0;
+
+        include "stdgates.inc";
+
+        qubit[1] eval;
+
+        qubit[1] q;
+
+        bit[2] meas;
+
+        rz(pi/2) eval[0];
+
+        sx eval[0];
+
+        rz(pi) eval[0];
+
+        rz(-pi) q[0];
+
+        sx q[0];
+
+        rz(2.214297435588181) q[0];
+
+        sx q[0];
+
+        cx eval[0],q[0];
+
+        sx q[0];
+
+        rz(2.214297435588181) q[0];
+
+        sx q[0];
+
+        rz(-pi) q[0];
+
+        cx eval[0],q[0];
+
+        sx eval[0];
+
+        rz(pi/2) eval[0];
+
+        rz(-pi) q[0];
+
+        sx q[0];
+
+        rz(2.214297435588181) q[0];
+
+        sx q[0];
+
+        barrier eval[0],q[0];
+
+        meas[0] = measure eval[0];
+
+        meas[1] = measure q[0];
+
+        '
+      circuitFormat: qasm3
+      qubits: 2
+      shots: 128
+      priority: balanced
+      source:
+        qslurmSource: qslurm_workloads/pure_quantum/amplitude_estimation_ae/spec_2.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/pure_quantum/amplitude_estimation_ae
+        spec: /home/reol/Qonductor-SC25/workflow/pure_quantum/amplitude_estimation_ae/spec_2.json

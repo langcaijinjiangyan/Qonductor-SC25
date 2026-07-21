@@ -48,6 +48,16 @@ spec:
               value: "/data/workflow_registry"
             - name: QONDUCTOR_LOG_LEVEL
               value: "INFO"
+            - name: QONDUCTOR_SCHEDULING_INTERVAL
+              value: "__SCHEDULING_INTERVAL__"
+            - name: QONDUCTOR_SCHEDULING_THRESHOLD
+              value: "__SCHEDULING_THRESHOLD__"
+            - name: QONDUCTOR_TRANSPILATION_WORKERS
+              value: "__TRANSPILATION_WORKERS__"
+            - name: QONDUCTOR_TRANSPILATION_CACHE_ENABLED
+              value: "__TRANSPILATION_CACHE_ENABLED__"
+            - name: QONDUCTOR_TRANSPILATION_CACHE_SIZE
+              value: "__TRANSPILATION_CACHE_SIZE__"
             - name: QISKIT_PARALLEL
               value: "False"
           resources:
