@@ -88,6 +88,7 @@ class _PendingQuantumJob:
     circuit_qasm: str = ""
     circuit_format: str = "qasm2"
     parameter_bindings: dict[str, float] = field(default_factory=dict)
+    preferred_qpu: str = ""
     schedule_immediately: bool = False
     arrived_at: float = field(default_factory=time.monotonic)
 
@@ -104,6 +105,7 @@ class QuantumSchedulerController:
         mode: str = "local",
         scheduling_interval: int = 30,
         scheduling_threshold: int = 10,
+        scheduling_batch_size: int = 120,
         transpilation_cache_enabled: bool = True,
         transpilation_cache_size: int = 256,
     ) -> None:
@@ -111,6 +113,7 @@ class QuantumSchedulerController:
         self.k8s = K8sClient(mode=mode)
         self.scheduling_interval = scheduling_interval
         self.scheduling_threshold = scheduling_threshold
+        self.scheduling_batch_size = max(1, scheduling_batch_size)
         self.transpilation_cache_enabled = transpilation_cache_enabled
 
         # The NSGA-II scheduler (reuses existing implementation).
@@ -168,9 +171,10 @@ class QuantumSchedulerController:
 
         logger.info(
             "QuantumSchedulerController ready: %d backends, "
-            "interval=%ds, threshold=%d, transpilation_cache=%s, "
+            "interval=%ds, threshold=%d, batch_size=%d, transpilation_cache=%s, "
             "cache_size=%d",
             len(self._backends), scheduling_interval, scheduling_threshold,
+            self.scheduling_batch_size,
             "enabled" if transpilation_cache_enabled else "disabled",
             transpilation_cache_size,
         )
@@ -386,6 +390,7 @@ class QuantumSchedulerController:
                 circuit_qasm=spec.get("circuitQasm", ""),
                 circuit_format=spec.get("circuitFormat", "qasm2"),
                 parameter_bindings=spec.get("parameterBindings", {}) or {},
+                preferred_qpu=spec.get("preferredQPU", ""),
                 schedule_immediately=bool(
                     spec.get("scheduleImmediately", False)
                 ),
@@ -489,6 +494,19 @@ class QuantumSchedulerController:
                     "Quantum scheduling cycle failed; controller will keep running",
                 )
                 return None
+
+    def _take_pending_batch(
+        self,
+    ) -> tuple[list[_PendingQuantumJob], int]:
+        """Remove one bounded FIFO batch and return its remaining queue size."""
+        with self._pending_condition:
+            if not self._pending:
+                return [], 0
+            batch_size = min(len(self._pending), self.scheduling_batch_size)
+            pending = self._pending[:batch_size]
+            del self._pending[:batch_size]
+            self._last_schedule_time = time.monotonic()
+            return pending, len(self._pending)
 
     def _build_scheduling_job(self, qj: _PendingQuantumJob) -> SchedulingJob:
         """Convert a QuantumJob CR into the scheduler's native job object."""
@@ -610,15 +628,16 @@ class QuantumSchedulerController:
         2. Optimization: NSGA-II Pareto front
         3. Selection: MCDM pseudo-weights
         """
-        # Drain pending queue while the watch thread continues accepting jobs.
-        with self._pending_condition:
-            if not self._pending:
-                return None
-            pending = self._pending[:]
-            self._pending.clear()
-            self._last_schedule_time = time.monotonic()
+        # Take one bounded batch while the watch thread continues accepting jobs.
+        pending, remaining_pending = self._take_pending_batch()
+        if not pending:
+            return None
 
-        logger.info("Scheduling cycle: %d quantum jobs", len(pending))
+        logger.info(
+            "Scheduling cycle: %d quantum jobs, %d remaining pending",
+            len(pending),
+            remaining_pending,
+        )
 
         # ---- Stage 1: Pre-processing ----
         # Convert QuantumJob CRs into SchedulingJob objects.  Newer CRs may
@@ -712,6 +731,31 @@ class QuantumSchedulerController:
         for idx, ((job, backend), qj) in enumerate(
             zip(assignments, pending)
         ):
+            if qj.preferred_qpu:
+                preferred_backend = next(
+                    (
+                        candidate
+                        for candidate in self._backends
+                        if candidate.name == qj.preferred_qpu
+                    ),
+                    None,
+                )
+                if preferred_backend is None:
+                    reason = (
+                        f"preferred QPU {qj.preferred_qpu!r} is not available"
+                    )
+                    logger.error("QuantumJob %s: %s", qj.cr_name, reason)
+                    self.k8s.update_cr_status(QUANTUM_JOB_PLURAL, qj.cr_name, {
+                        "phase": "Failed",
+                        "conditions": [{
+                            "type": "PreferredQPUUnavailable",
+                            "status": "True",
+                            "reason": reason,
+                        }],
+                    })
+                    continue
+                backend = preferred_backend
+
             est_fidelity = (
                 solution_fidelities[idx]
                 if idx < len(solution_fidelities) else 0.0

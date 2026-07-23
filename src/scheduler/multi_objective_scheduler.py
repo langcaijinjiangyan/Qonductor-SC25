@@ -928,7 +928,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                     self._transpile_job_backend(*task) for task in tasks
                 ]
             else:
-                with multiprocessing.Pool(processes=worker_count) as pool:
+                with ThreadPool(processes=worker_count) as pool:
                     values = pool.starmap(
                         self._transpile_job_backend,
                         tasks,
@@ -1022,7 +1022,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                     self._transpile_job_backend(*task) for task in tasks
                 ]
             else:
-                with multiprocessing.Pool(processes=worker_count) as pool:
+                with ThreadPool(processes=worker_count) as pool:
                     values = pool.starmap(
                         self._transpile_job_backend,
                         tasks,
@@ -1054,7 +1054,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                 for job in jobs
             ]
         else:
-            with multiprocessing.Pool(processes=worker_count) as pool:
+            with ThreadPool(processes=worker_count) as pool:
                 values = pool.starmap(
                     self._transpile_job,
                     [(job, backends, processor_types) for job in jobs],
@@ -1150,7 +1150,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                             transpiled_circuits, job.shots
                         )
                         circuit_fidelities = []
-                        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+                        with ThreadPool(processes=multiprocessing.cpu_count()) as pool:
                             circuit_fidelities = pool.starmap(self._calculate_fidelity, [(transpiled_circuit, backend) for transpiled_circuit in transpiled_job.circuits])
                         #for transpiled_circuit in transpiled_job.circuits:
                          #   circuit_fidelity = self._calculate_fidelity(

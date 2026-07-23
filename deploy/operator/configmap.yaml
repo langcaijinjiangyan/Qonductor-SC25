@@ -13,6 +13,7 @@ data:
     # Quantum scheduler settings (paper section 7)
     scheduling-interval: __SCHEDULING_INTERVAL__
     scheduling-threshold: __SCHEDULING_THRESHOLD__
+    scheduling-batch-size: __SCHEDULING_BATCH_SIZE__
 
     # MCDM preference weights: fidelity, jct, or balanced.
     default-priority: balanced

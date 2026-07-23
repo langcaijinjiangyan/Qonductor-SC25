@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "qnode": "20",
-  "circuits": {
-    "graphstate_indep_qiskit_20": "graphstate_indep_qiskit_20.qasm3"
-  },
-  "hybrid_job": false
-}

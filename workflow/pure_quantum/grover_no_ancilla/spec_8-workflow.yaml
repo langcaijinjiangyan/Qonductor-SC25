@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: pq-rerun-grover-no-ancilla-8-cm
+  name: pq-022-grover-no-ancilla-8-20260722152725-35c92f8
   namespace: default
   labels:
     app: qonductor
     algorithm: grover-no-ancilla
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 6190403f2419
+  workflowImageRef: '46ed5ae7fdb8'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -18734,7 +18734,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 8
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/grover_no_ancilla/spec_8.json

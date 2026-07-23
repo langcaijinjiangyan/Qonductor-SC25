@@ -44,6 +44,12 @@ def parse_args() -> argparse.Namespace:
         default="hybrid",
         help="Hybrid corpus subdirectory to sample from, e.g. hybrid or hybrid_6q.",
     )
+    parser.add_argument(
+        "--shots",
+        type=int,
+        default=None,
+        help="Override shots in every generated workflow manifest.",
+    )
     parser.add_argument("--pure-size-ratio", default="4,3,2")
     parser.add_argument("--small-qubits", default="2,4")
     parser.add_argument("--medium-qubits", default="8,12")
@@ -519,7 +525,12 @@ def _register_workflow_images(
     return image_map
 
 
-def write_workflow_manifests(items: list[dict], corpus_root: Path, image_id_map: dict[tuple[str, str, str], str] | None = None) -> None:
+def write_workflow_manifests(
+    items: list[dict],
+    corpus_root: Path,
+    image_id_map: dict[tuple[str, str, str], str] | None = None,
+    shots: int | None = None,
+) -> None:
     for item in items:
         template_path = Path(item["workflow_manifest_template"])
         manifest = yaml.safe_load(template_path.read_text(encoding="utf-8")) or {}
@@ -548,6 +559,17 @@ def write_workflow_manifests(items: list[dict], corpus_root: Path, image_id_map:
         if item.get("workflow_parameters"):
             annotations["qonductor.io/workflow-parameters"] = item["workflow_parameters"]
 
+        if shots is not None:
+            workflow_inputs = manifest.setdefault("spec", {}).get(
+                "workflowInputs", {}
+            )
+            for runtime_config in workflow_inputs.values():
+                if isinstance(runtime_config, dict) and (
+                    "shots" in runtime_config
+                    or runtime_config.get("logicalCircuitId")
+                ):
+                    runtime_config["shots"] = shots
+
         # Overwrite workflowImageRef with freshly registered image id
         if image_id_map:
             driver = item.get("driver", "")
@@ -563,6 +585,8 @@ def write_workflow_manifests(items: list[dict], corpus_root: Path, image_id_map:
 
 def main() -> None:
     args = parse_args()
+    if args.shots is not None and args.shots < 1:
+        raise SystemExit("--shots must be >= 1")
     corpus_root = Path(args.corpus_root).resolve()
     corpus_index = Path(args.corpus_index).resolve() if args.corpus_index else corpus_root / "corpus_index.json"
     if corpus_index.exists():
@@ -807,6 +831,7 @@ def main() -> None:
         "pure_category_counts": dict(sorted(pure_category_counts.items())),
         "hybrid_category_counts": dict(sorted(hybrid_category_counts.items())),
         "hybrid_subdir": hybrid_subdir,
+        "shots_override": args.shots,
         "excluded_hybrid_categories": [],
         "missing_specs": [],
         "runtime_estimation_method_counts": dict(sorted(runtime_method_counts.items())),
@@ -847,7 +872,12 @@ def main() -> None:
     for path in [Path(args.output_manifest), Path(args.output_trace), Path(args.output_summary)]:
         path.parent.mkdir(parents=True, exist_ok=True)
 
-    write_workflow_manifests(manifest_entries, corpus_root, image_id_map)
+    write_workflow_manifests(
+        manifest_entries,
+        corpus_root,
+        image_id_map,
+        shots=args.shots,
+    )
     Path(args.output_manifest).write_text(manifest_text, encoding="utf-8")
     Path(args.output_trace).write_text(trace_text, encoding="utf-8")
     Path(args.output_summary).write_text(summary_text, encoding="utf-8")

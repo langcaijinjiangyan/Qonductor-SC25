@@ -12,17 +12,21 @@ Reads the following environment variables (set by
 - ``CIRCUIT_QASM``          — legacy single-circuit QASM fallback
 - ``SHOTS``                 — number of measurement shots
 - ``QUANTUM_JOB_NAME``      — optional QuantumJob CR to patch with results
+- ``QONDUCTOR_EXECUTION_BACKEND`` — ``aer`` or ``offline-replay``
+- ``QONDUCTOR_OFFLINE_RESULTS_PATH`` — read-only SQLite database path
 
-Loads the QPU profile, deserialises QASM2/QASM3 circuits, runs them using
-Qiskit Aer (``AerSimulator``) with the QPU's noise model from JSON, prints
-measurement counts as JSON, and patches QuantumJob.status.result when it is
-running inside Kubernetes with API access.
+Loads the QPU profile and either runs Qiskit Aer with its noise model or
+replays an exact result from the offline SQLite database. Prints measurement
+counts as JSON and patches QuantumJob.status.result when running in Kubernetes.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from pathlib import Path
+import sqlite3
 import sys
 import time
 from typing import Any
@@ -32,6 +36,10 @@ from qiskit import QuantumCircuit, qasm3, transpile
 from qiskit_aer import AerSimulator
 from qiskit_aer.noise import NoiseModel, ReadoutError
 from qiskit_aer.noise.errors import depolarizing_error, thermal_relaxation_error
+
+
+OFFLINE_REPLAY_BACKEND = "offline-replay"
+DEFAULT_NOISE_MODEL_VERSION = "qpu-json-depolarizing-readout-v1"
 
 
 def load_qpu_json(path: str) -> dict:
@@ -123,6 +131,161 @@ def _load_circuit(item: dict[str, Any]) -> QuantumCircuit:
     return qc
 
 
+def _canonical_parameter_bindings(bindings: dict[str, Any]) -> str:
+    if not isinstance(bindings, dict):
+        raise ValueError("offline parameter bindings must be a JSON object")
+    return json.dumps(
+        bindings,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+
+
+def _replay_offline_results(
+    payloads: list[dict[str, Any]],
+    *,
+    db_path: str,
+    qpu_name: str,
+    qpu_data: dict[str, Any],
+    shots: int,
+    noise_model_version: str,
+) -> tuple[list[dict[str, Any]], float, list[dict[str, str]]]:
+    if not db_path:
+        raise ValueError("QONDUCTOR_OFFLINE_RESULTS_PATH is required")
+    if not Path(db_path).is_file():
+        raise FileNotFoundError(f"offline results database not found: {db_path}")
+
+    profile_version = str(qpu_data.get("profile_version", ""))
+    if not profile_version:
+        raise ValueError("QPU profile is missing profile_version")
+    lookup_qpu_name = str(
+        qpu_data.get("offline_results_qpu_name")
+        or qpu_data.get("qonductor_base_name")
+        or qpu_name
+    )
+
+    db_uri = f"{Path(db_path).resolve().as_uri()}?mode=ro"
+    connection = sqlite3.connect(db_uri, uri=True)
+    connection.row_factory = sqlite3.Row
+    replayed_results: list[dict[str, Any]] = []
+    lookup_keys: list[dict[str, str]] = []
+    total_execution_time_ns = 0.0
+    try:
+        for item in payloads:
+            lookup = item.get("offline_lookup")
+            if not isinstance(lookup, dict):
+                raise ValueError(
+                    "offline-replay payload is missing offline_lookup metadata"
+                )
+
+            qasm_sha256 = str(lookup.get("qasm_sha256", ""))
+            if len(qasm_sha256) != 64:
+                raise ValueError("offline_lookup.qasm_sha256 is invalid")
+            logical_id = str(lookup.get("logical_id", ""))
+            bindings_json = _canonical_parameter_bindings(
+                lookup.get("parameter_bindings", {})
+            )
+            bindings_sha256 = hashlib.sha256(
+                bindings_json.encode("utf-8")
+            ).hexdigest()
+            key = {
+                "qasm_sha256": qasm_sha256,
+                "parameter_bindings_sha256": bindings_sha256,
+                "qpu_name": lookup_qpu_name,
+                "profile_version": profile_version,
+                "shots": str(shots),
+                "noise_model_version": noise_model_version,
+            }
+            rows = connection.execute(
+                """
+                SELECT qasm_sha256, counts_json, simulated_execution_time_ns
+                FROM hardware_results
+                WHERE qasm_sha256 = ?
+                  AND parameter_bindings_sha256 = ?
+                  AND qpu_name = ?
+                  AND profile_version = ?
+                  AND shots = ?
+                  AND noise_model_version = ?
+                """,
+                (
+                    qasm_sha256,
+                    bindings_sha256,
+                    lookup_qpu_name,
+                    profile_version,
+                    shots,
+                    noise_model_version,
+                ),
+            ).fetchall()
+            if not rows and logical_id:
+                rows = connection.execute(
+                    """
+                    SELECT qasm_sha256, counts_json,
+                           simulated_execution_time_ns
+                    FROM hardware_results
+                    WHERE logical_id = ?
+                      AND parameter_bindings_sha256 = ?
+                      AND qpu_name = ?
+                      AND profile_version = ?
+                      AND shots = ?
+                      AND noise_model_version = ?
+                    LIMIT 2
+                    """,
+                    (
+                        logical_id,
+                        bindings_sha256,
+                        lookup_qpu_name,
+                        profile_version,
+                        shots,
+                        noise_model_version,
+                    ),
+                ).fetchall()
+                if len(rows) == 1:
+                    key["submitted_qasm_sha256"] = qasm_sha256
+                    key["qasm_sha256"] = str(rows[0]["qasm_sha256"])
+                    key["resolved_by"] = "logical_id"
+                    key["logical_id"] = logical_id
+            if not rows:
+                raise LookupError(
+                    "offline result not found for key "
+                    + json.dumps(key, sort_keys=True)
+                )
+            if len(rows) != 1:
+                raise LookupError(
+                    "offline result is ambiguous for logical_id fallback "
+                    + json.dumps(key, sort_keys=True)
+                )
+            row = rows[0]
+
+            counts = json.loads(row["counts_json"])
+            if not isinstance(counts, dict):
+                raise ValueError("offline counts_json must contain an object")
+            counts = {
+                str(bitstring): int(count)
+                for bitstring, count in counts.items()
+            }
+            if any(count < 0 for count in counts.values()):
+                raise ValueError("offline counts_json contains a negative count")
+            if sum(counts.values()) != shots:
+                raise ValueError(
+                    "offline counts do not sum to requested shots: "
+                    f"{sum(counts.values())} != {shots}"
+                )
+
+            execution_time_ns = float(row["simulated_execution_time_ns"])
+            if execution_time_ns < 0:
+                raise ValueError("offline execution time must be non-negative")
+            total_execution_time_ns += execution_time_ns
+            replayed_results.append({"counts": counts, "success": True})
+            lookup_keys.append(key)
+    finally:
+        connection.close()
+
+    replay_seconds = total_execution_time_ns / 1e9
+    time.sleep(replay_seconds)
+    return replayed_results, replay_seconds, lookup_keys
+
+
 def _patch_quantum_job_status(status: dict[str, Any]) -> None:
     qj_name = os.environ.get("QUANTUM_JOB_NAME", "")
     if not qj_name or os.environ.get("QONDUCTOR_MODE") != "k8s":
@@ -155,6 +318,9 @@ def main() -> None:
     qpu_name = os.environ.get("QPU_NAME", "")
     qpu_json_path = os.environ.get("QPU_JSON_PATH", "")
     shots = int(os.environ.get("SHOTS", "4000"))
+    execution_backend = os.environ.get(
+        "QONDUCTOR_EXECUTION_BACKEND", "aer"
+    ).strip().lower()
 
     started = time.monotonic()
     try:
@@ -163,76 +329,100 @@ def main() -> None:
             raise ValueError("Missing QPU_JSON_PATH or circuit payload")
 
         qpu_data = load_qpu_json(qpu_json_path)
-        noise = build_noise_model(qpu_data)
-        backend = AerSimulator(
-            noise_model=noise,
-            coupling_map=qpu_data["coupling_map"],
-            basis_gates=(
-                qpu_data["hardware"]["native_single_qubit_gates"]
-                + [qpu_data["hardware"]["native_two_qubit_gate"]]
-            ),
-        )
-        circuits = [
-            transpile(
-                _load_circuit(item).decompose(reps=10),
-                backend=backend,
-                optimization_level=0,
-            )
-            for item in payloads
-        ]
-
-        job = backend.run(circuits, shots=shots)
-        result = job.result()
-        elapsed = time.monotonic() - started
-
-        # --- Optional: compute actual Hellinger fidelity ----------
         actual_fidelity = None
-        if os.environ.get("COMPUTE_ACTUAL_FIDELITY", "").lower() in (
-            "1", "true", "yes",
-        ):
-            import numpy as np
+        replay_seconds = None
+        lookup_keys = None
+        if execution_backend == OFFLINE_REPLAY_BACKEND:
+            result_items, replay_seconds, lookup_keys = _replay_offline_results(
+                payloads,
+                db_path=os.environ.get("QONDUCTOR_OFFLINE_RESULTS_PATH", ""),
+                qpu_name=qpu_name,
+                qpu_data=qpu_data,
+                shots=shots,
+                noise_model_version=os.environ.get(
+                    "QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION",
+                    DEFAULT_NOISE_MODEL_VERSION,
+                ),
+            )
+        elif execution_backend == "aer":
+            noise = build_noise_model(qpu_data)
+            backend = AerSimulator(
+                noise_model=noise,
+                coupling_map=qpu_data["coupling_map"],
+                basis_gates=(
+                    qpu_data["hardware"]["native_single_qubit_gates"]
+                    + [qpu_data["hardware"]["native_two_qubit_gate"]]
+                ),
+            )
+            circuits = [
+                transpile(
+                    _load_circuit(item).decompose(reps=10),
+                    backend=backend,
+                    optimization_level=0,
+                )
+                for item in payloads
+            ]
 
-            ideal_backend = AerSimulator()
-            ideal_result = ideal_backend.run(circuits, shots=shots).result()
-
-            fidelities = []
-            for i in range(len(circuits)):
-                noisy_counts = result.get_counts(i)
-                ideal_counts = ideal_result.get_counts(i)
-                all_keys = (
-                    set(noisy_counts.keys()) | set(ideal_counts.keys())
-                )
-                noisy_probs = np.array(
-                    [noisy_counts.get(k, 0) / shots for k in all_keys]
-                )
-                ideal_probs = np.array(
-                    [ideal_counts.get(k, 0) / shots for k in all_keys]
-                )
-                hd = (
-                    np.sqrt(
-                        np.sum(
-                            (np.sqrt(noisy_probs) - np.sqrt(ideal_probs))
-                            ** 2,
-                        )
-                    )
-                    / np.sqrt(2)
-                )
-                fidelities.append(1.0 - hd**2)
-            actual_fidelity = float(np.mean(fidelities))
-
-        output = {
-            "qpu": qpu_name,
-            "shots": shots,
-            "circuit_count": len(circuits),
-            "execution_time_seconds": elapsed,
-            "results": [
+            job = backend.run(circuits, shots=shots)
+            result = job.result()
+            result_items = [
                 {
                     "counts": dict(result.get_counts(i)),
                     "success": result.success,
                 }
                 for i in range(len(circuits))
-            ],
+            ]
+
+            # --- Optional: compute actual Hellinger fidelity ----------
+            if os.environ.get("COMPUTE_ACTUAL_FIDELITY", "").lower() in (
+                "1", "true", "yes",
+            ):
+                import numpy as np
+
+                ideal_backend = AerSimulator()
+                ideal_result = ideal_backend.run(circuits, shots=shots).result()
+
+                fidelities = []
+                for i in range(len(circuits)):
+                    noisy_counts = result.get_counts(i)
+                    ideal_counts = ideal_result.get_counts(i)
+                    all_keys = set(noisy_counts.keys()) | set(ideal_counts.keys())
+                    noisy_probs = np.array(
+                        [noisy_counts.get(k, 0) / shots for k in all_keys]
+                    )
+                    ideal_probs = np.array(
+                        [ideal_counts.get(k, 0) / shots for k in all_keys]
+                    )
+                    hd = (
+                        np.sqrt(
+                            np.sum(
+                                (np.sqrt(noisy_probs) - np.sqrt(ideal_probs))
+                                ** 2,
+                            )
+                        )
+                        / np.sqrt(2)
+                    )
+                    fidelities.append(1.0 - hd**2)
+                actual_fidelity = float(np.mean(fidelities))
+        else:
+            raise ValueError(
+                "QONDUCTOR_EXECUTION_BACKEND must be 'aer' or "
+                f"'{OFFLINE_REPLAY_BACKEND}', got {execution_backend!r}"
+            )
+
+        elapsed = time.monotonic() - started
+
+        output = {
+            "qpu": qpu_name,
+            "shots": shots,
+            "circuit_count": len(payloads),
+            "execution_backend": execution_backend,
+            "execution_time_seconds": elapsed,
+            "results": result_items,
         }
+        if replay_seconds is not None:
+            output["replayed_execution_time_seconds"] = replay_seconds
+            output["offline_lookup_keys"] = lookup_keys
         print(json.dumps(output))
         status_patch: dict[str, Any] = {
             "phase": "Completed",

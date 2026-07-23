@@ -19,6 +19,9 @@ from src.utils.logging_config import configure_logging
 from src.workflow.qaoa_runtime import (
     DEFAULT_QUANTUM_TIMEOUT_SECONDS,
     initialize_parameters,
+    legacy_c_random,
+    offline_parameter_pair,
+    quantum_job_assigned_qpu,
     submit_quantum_eval,
     wait_for_quantum_result,
     wrap_angles,
@@ -134,14 +137,48 @@ def run_vqe_spsa_driver(
     best_theta = list(theta)
     best_objective = math.inf
     rng = random.Random(int(cfg.get("seed", 12345)))
+    execution_backend = os.environ.get(
+        "QONDUCTOR_EXECUTION_BACKEND", "aer"
+    ).strip().lower()
+    offline_replay = execution_backend == "offline-replay"
+    legacy_rng = legacy_c_random(int(cfg.get("seed", 12345)))
+    pinned_qpu = ""
     history = []
 
     for iteration in range(max_iterations):
         a = 0.18 / math.pow(float(iteration + 1), 0.602)
         c = 0.12 / math.pow(float(iteration + 1), 0.101)
-        delta = [-1 if rng.random() < 0.5 else 1 for _ in parameter_names]
-        theta_plus = [theta[i] + c * delta[i] for i in range(len(theta))]
-        theta_minus = [theta[i] - c * delta[i] for i in range(len(theta))]
+        if offline_replay and pinned_qpu:
+            plus_bindings, minus_bindings = offline_parameter_pair(
+                logical_id=logical_id,
+                qpu_name=pinned_qpu,
+                iteration=iteration,
+                parameter_names=parameter_names,
+                shots=shots,
+            )
+            theta = [
+                0.5 * (plus_bindings[name] + minus_bindings[name])
+                for name in parameter_names
+            ]
+            delta = [
+                1 if plus_bindings[name] > minus_bindings[name] else -1
+                for name in parameter_names
+            ]
+        elif offline_replay:
+            delta = [
+                -1 if next(legacy_rng) < 0.5 else 1
+                for _ in parameter_names
+            ]
+            theta_plus = [theta[i] + c * delta[i] for i in range(len(theta))]
+            theta_minus = [theta[i] - c * delta[i] for i in range(len(theta))]
+            plus_bindings = dict(zip(parameter_names, theta_plus))
+            minus_bindings = dict(zip(parameter_names, theta_minus))
+        else:
+            delta = [-1 if rng.random() < 0.5 else 1 for _ in parameter_names]
+            theta_plus = [theta[i] + c * delta[i] for i in range(len(theta))]
+            theta_minus = [theta[i] - c * delta[i] for i in range(len(theta))]
+            plus_bindings = dict(zip(parameter_names, theta_plus))
+            minus_bindings = dict(zip(parameter_names, theta_minus))
 
         plus_qj = submit_quantum_eval(
             client,
@@ -149,33 +186,58 @@ def run_vqe_spsa_driver(
             step_id=step_id,
             logical_circuit_id=logical_id,
             circuit_qasm=circuit_qasm,
-            parameter_bindings=dict(zip(parameter_names, theta_plus)),
+            parameter_bindings=plus_bindings,
             qubits=qubits,
             shots=shots,
             priority=priority,
             iteration=iteration,
             eval_label="plus",
+            preferred_qpu=pinned_qpu,
             namespace=namespace,
         )
+        plus_result = None
+        if offline_replay:
+            plus_result = wait_for_quantum_result(
+                client, plus_qj["metadata"]["name"],
+                timeout_s=timeout_s, poll_s=poll_s,
+            )
+            if not pinned_qpu:
+                pinned_qpu = quantum_job_assigned_qpu(
+                    client, plus_qj["metadata"]["name"]
+                )
+                database_plus, minus_bindings = offline_parameter_pair(
+                    logical_id=logical_id,
+                    qpu_name=pinned_qpu,
+                    iteration=iteration,
+                    parameter_names=parameter_names,
+                    shots=shots,
+                )
+                if database_plus != plus_bindings:
+                    raise RuntimeError(
+                        "offline driver parameters do not match the database "
+                        "trajectory at iteration 0"
+                    )
+
         minus_qj = submit_quantum_eval(
             client,
             workflow_ref=workflow_ref,
             step_id=step_id,
             logical_circuit_id=logical_id,
             circuit_qasm=circuit_qasm,
-            parameter_bindings=dict(zip(parameter_names, theta_minus)),
+            parameter_bindings=minus_bindings,
             qubits=qubits,
             shots=shots,
             priority=priority,
             iteration=iteration,
             eval_label="minus",
+            preferred_qpu=pinned_qpu,
             namespace=namespace,
         )
-
-        plus_result = wait_for_quantum_result(
-            client, plus_qj["metadata"]["name"],
-            timeout_s=timeout_s, poll_s=poll_s,
-        )
+        if plus_result is None:
+            plus_result = wait_for_quantum_result(
+                client, plus_qj["metadata"]["name"],
+                timeout_s=timeout_s, poll_s=poll_s,
+            )
         minus_result = wait_for_quantum_result(
             client, minus_qj["metadata"]["name"],
             timeout_s=timeout_s, poll_s=poll_s,

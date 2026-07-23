@@ -59,6 +59,7 @@ TOTAL_JOBS=200
 SUBMIT_WINDOW_SEC=300.0
 HYBRID_JOB_RATIO=0.2
 HYBRID_SUBDIR="hybrid"
+SHOTS=1024
 PURE_SIZE_RATIO="4,3,2"
 SMALL_QUBITS="2,4"
 MEDIUM_QUBITS="8,12"
@@ -105,6 +106,7 @@ Generator options:
   --submit-window-sec SEC   Submission time window in seconds (default: ${SUBMIT_WINDOW_SEC})
   --hybrid-job-ratio RATIO  Fraction of jobs that are hybrid VQE/QAOA (default: ${HYBRID_JOB_RATIO})
   --hybrid-subdir NAME      Subdirectory for hybrid entries (default: ${HYBRID_SUBDIR})
+  --shots N                 Shots for every generated workflow (default: ${SHOTS})
   --pure-size-ratio RATIO   small:medium:large ratio for pure quantum (default: ${PURE_SIZE_RATIO})
   --small-qubits LIST       Comma-separated small qubit counts (default: ${SMALL_QUBITS})
   --medium-qubits LIST      Comma-separated medium qubit counts (default: ${MEDIUM_QUBITS})
@@ -150,6 +152,8 @@ while [[ $# -gt 0 ]]; do
             HYBRID_JOB_RATIO="$2"; shift 2 ;;
         --hybrid-subdir)
             HYBRID_SUBDIR="$2"; shift 2 ;;
+        --shots)
+            SHOTS="$2"; shift 2 ;;
         --pure-size-ratio)
             PURE_SIZE_RATIO="$2"; shift 2 ;;
         --small-qubits)
@@ -209,6 +213,11 @@ if [[ "${TOTAL_JOBS}" -lt 1 ]]; then
     exit 1
 fi
 
+if [[ "${SHOTS}" -lt 1 ]]; then
+    error "--shots must be >= 1"
+    exit 1
+fi
+
 # Validate arrival-mode choice
 if [[ "${ARRIVAL_MODE}" != "deterministic" && "${ARRIVAL_MODE}" != "poisson" ]]; then
     error "--arrival-mode must be 'deterministic' or 'poisson', got: ${ARRIVAL_MODE}"
@@ -258,6 +267,7 @@ echo "  Submit window:  ${SUBMIT_WINDOW_SEC}s"
 echo "  Arrival mode:   ${ARRIVAL_MODE}"
 echo "  Hybrid ratio:   ${HYBRID_JOB_RATIO}"
 echo "  Hybrid subdir:  ${HYBRID_SUBDIR}"
+echo "  Shots:          ${SHOTS}"
 echo "  Pure size ratio: ${PURE_SIZE_RATIO} (small:medium:large)"
 echo "  Seed:           ${SEED}"
 echo "  Dry run:        $([[ -n "${DRY_RUN}" ]] && echo "yes" || echo "no")"
@@ -294,6 +304,7 @@ if ! "${PYTHON_CMD}" "${GENERATOR}" \
     --submit-window-sec "${SUBMIT_WINDOW_SEC}" \
     --hybrid-job-ratio "${HYBRID_JOB_RATIO}" \
     --hybrid-subdir "${HYBRID_SUBDIR}" \
+    --shots "${SHOTS}" \
     --pure-size-ratio "${PURE_SIZE_RATIO}" \
     --small-qubits "${SMALL_QUBITS}" \
     --medium-qubits "${MEDIUM_QUBITS}" \

@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-049-pure-quantum-quantum-phase-estimation-qpe-inexact-8-202
+  name: pq-043-quantum-phase-estimation-qpe-inexact-8-20260722152725-ba
   namespace: default
   labels:
     app: qonductor
     algorithm: quantum-phase-estimation-qpe-inexact
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 24d49b137475
+  workflowImageRef: '616f2b6d1606'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -392,7 +392,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 8
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/quantum_phase_estimation_qpe_inexact/spec_8.json

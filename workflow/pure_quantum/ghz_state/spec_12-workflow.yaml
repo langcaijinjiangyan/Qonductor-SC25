@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-013-pure-quantum-ghz-state-12-20260720174330-f0ed14d
+  name: pq-011-ghz-state-12-20260722152725-f0ed14d
   namespace: default
   labels:
     app: qonductor
     algorithm: ghz-state
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: e6389e94a9c1
+  workflowImageRef: 'de2ceab9e4ea'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -100,7 +100,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 12
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/ghz_state/spec_12.json

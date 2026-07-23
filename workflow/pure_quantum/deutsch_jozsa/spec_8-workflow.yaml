@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-012-pure-quantum-deutsch-jozsa-8-20260720174330-4ab869d
+  name: pq-010-deutsch-jozsa-8-20260722152725-4ab869d
   namespace: default
   labels:
     app: qonductor
     algorithm: deutsch-jozsa
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 5802f7a6b7e7
+  workflowImageRef: '1360874396a4'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -152,7 +152,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 8
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/deutsch_jozsa/spec_8.json

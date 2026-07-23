@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-022-pure-quantum-graph-state-4-20260720174330-f2ce12a
+  name: pq-018-graph-state-4-20260722152725-f2ce12a
   namespace: default
   labels:
     app: qonductor
     algorithm: graph-state
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 0afdd51b7e73
+  workflowImageRef: 'b4c592a8b237'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -88,7 +88,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 4
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/graph_state/spec_4.json

@@ -1,6 +1,7 @@
 data/benchmarks/benchmarks_unpacked
 data/database/circuits_unpacked
 data/workflow_registry
+data/f1_qonductor_runs
 data/batch_results
 data/deploy_logs
 qslurm_workloads

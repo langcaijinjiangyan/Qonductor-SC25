@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-062-pure-quantum-w-state-4-20260720174330-8754ad8
+  name: pq-054-w-state-4-20260722152725-8754ad8
   namespace: default
   labels:
     app: qonductor
     algorithm: w-state
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 77a64bd8d649
+  workflowImageRef: '30d1c86c26e9'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -106,7 +106,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 4
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/w_state/spec_4.json

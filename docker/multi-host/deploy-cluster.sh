@@ -49,9 +49,13 @@
 #   OPERATOR_MEMORY_LIMIT   operator memory limit (default: 1Gi)
 #   SCHEDULING_INTERVAL     quantum scheduler interval in seconds (default: 30)
 #   SCHEDULING_THRESHOLD    queue depth triggering scheduling (default: 10)
-#   TRANSPILATION_WORKERS   maximum parallel transpilation processes (default: 8)
+#   SCHEDULING_BATCH_SIZE   maximum jobs per scheduling cycle (default: 120)
+#   TRANSPILATION_WORKERS   maximum parallel transpilation threads (default: 8)
 #   TRANSPILATION_CACHE_ENABLED enable transpilation cache: 0 or 1 (default: 1)
 #   TRANSPILATION_CACHE_SIZE maximum cached circuit/backend templates (default: 256)
+#   QONDUCTOR_EXECUTION_BACKEND aer or offline-replay (default: aer)
+#   OFFLINE_RESULTS_DB_SOURCE source SQLite path for offline-replay
+#   QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION offline database noise-model key
 # ============================================================================
 
 set -euo pipefail
@@ -81,9 +85,15 @@ OPERATOR_CPU_LIMIT="${OPERATOR_CPU_LIMIT:-4}"
 OPERATOR_MEMORY_LIMIT="${OPERATOR_MEMORY_LIMIT:-4Gi}"
 SCHEDULING_INTERVAL="${SCHEDULING_INTERVAL:-10}"
 SCHEDULING_THRESHOLD="${SCHEDULING_THRESHOLD:-5}"
+SCHEDULING_BATCH_SIZE="${SCHEDULING_BATCH_SIZE:-120}"
 TRANSPILATION_WORKERS="${TRANSPILATION_WORKERS:-8}"
 TRANSPILATION_CACHE_ENABLED="${TRANSPILATION_CACHE_ENABLED:-1}"
 TRANSPILATION_CACHE_SIZE="${TRANSPILATION_CACHE_SIZE:-256}"
+QUANTUM_EXECUTION_BACKEND="${QONDUCTOR_EXECUTION_BACKEND:-offline-replay}"
+OFFLINE_RESULTS_DB_SOURCE="${OFFLINE_RESULTS_DB_SOURCE:-${PROJECT_ROOT}/data/offline_results/quantum_offline_results.sqlite}"
+OFFLINE_RESULTS_HOST_DIR="/etc/qonductor/offline-results"
+OFFLINE_RESULTS_DB_NAME="quantum_offline_results.sqlite"
+OFFLINE_NOISE_MODEL_VERSION="${QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION:-qpu-json-depolarizing-readout-v1}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -364,6 +374,15 @@ validate_config() {
         die "TRANSPILATION_CACHE_ENABLED must be 0 or 1"
     [[ "$TRANSPILATION_CACHE_SIZE" =~ ^[1-9][0-9]*$ ]] || \
         die "TRANSPILATION_CACHE_SIZE must be a positive integer"
+    [[ "$SCHEDULING_BATCH_SIZE" =~ ^[1-9][0-9]*$ ]] || \
+        die "SCHEDULING_BATCH_SIZE must be a positive integer"
+    [[ "$QUANTUM_EXECUTION_BACKEND" == "aer" || \
+       "$QUANTUM_EXECUTION_BACKEND" == "offline-replay" ]] || \
+        die "QONDUCTOR_EXECUTION_BACKEND must be aer or offline-replay"
+    if [[ "$QUANTUM_EXECUTION_BACKEND" == "offline-replay" ]]; then
+        [[ -f "$OFFLINE_RESULTS_DB_SOURCE" ]] || \
+            die "Offline results database not found: $OFFLINE_RESULTS_DB_SOURCE"
+    fi
 
     local qpu_count=0
     for ((i = 0; i < ${AGENTS_COUNT:-0}; i++)); do
@@ -708,7 +727,12 @@ deploy_server() {
 
     # Create data volume.
     _run "$host" "docker volume create ${container_name}-data 2>/dev/null || true"
-    _run "$host" "sudo mkdir -p /etc/qonductor/qpus"
+    _run "$host" "sudo mkdir -p /etc/qonductor/qpus '${OFFLINE_RESULTS_HOST_DIR}'"
+
+    local offline_results_mount=""
+    if [[ "$QUANTUM_EXECUTION_BACKEND" == "offline-replay" ]]; then
+        offline_results_mount="-v '${OFFLINE_RESULTS_HOST_DIR}:${OFFLINE_RESULTS_HOST_DIR}:ro'"
+    fi
 
     _run "$host" "docker run -d \
         --name '${container_name}' \
@@ -720,6 +744,7 @@ deploy_server() {
         -v '${container_name}-data:/var/lib/rancher/k3s' \
         -v '/etc/rancher:/etc/rancher' \
         -v '/etc/qonductor/qpus:/etc/qonductor/qpus:ro' \
+        ${offline_results_mount} \
         -v '${PROJECT_ROOT}/data:${PROJECT_ROOT}/data' \
         -e K3S_KUBECONFIG_MODE=644 \
         -e K3S_TOKEN='${k3s_token}' \
@@ -853,7 +878,12 @@ deploy_agent() {
     [[ -n "$cpus" ]] && log "  CPUs: ${cpus}" ; [[ -n "$memory" ]] && log "  Memory: ${memory}"
 
     _run "$host" "docker volume create ${container_name}-data 2>/dev/null || true"
-    _run "$host" "sudo mkdir -p /etc/qonductor/qpus"
+    _run "$host" "sudo mkdir -p /etc/qonductor/qpus '${OFFLINE_RESULTS_HOST_DIR}'"
+
+    local offline_results_mount=""
+    if [[ "$QUANTUM_EXECUTION_BACKEND" == "offline-replay" ]]; then
+        offline_results_mount="-v '${OFFLINE_RESULTS_HOST_DIR}:${OFFLINE_RESULTS_HOST_DIR}:ro'"
+    fi
 
     _run "$host" "docker run -d \
             --name '${container_name}' \
@@ -864,6 +894,7 @@ deploy_agent() {
             ${mem_flag} \
             -v '${container_name}-data:/var/lib/rancher/k3s' \
             -v '/etc/qonductor/qpus:/etc/qonductor/qpus:ro' \
+            ${offline_results_mount} \
             -e K3S_TOKEN='${k3s_token}' \
             -e K3S_URL='https://${server_host}:6443' \
             'rancher/k3s:${k3s_version}' \
@@ -1130,6 +1161,29 @@ sync_qpu_profiles() {
     done
 }
 
+sync_offline_results() {
+    [[ "$QUANTUM_EXECUTION_BACKEND" == "offline-replay" ]] || return 0
+
+    log "Syncing offline quantum results database to cluster hosts …"
+    local -a hosts
+    mapfile -t hosts < <(_all_hosts | sort -u)
+    for host in "${hosts[@]}"; do
+        local destination="${OFFLINE_RESULTS_HOST_DIR}/${OFFLINE_RESULTS_DB_NAME}"
+        _run "$host" "sudo mkdir -p '${OFFLINE_RESULTS_HOST_DIR}'"
+        if [[ "$DRY_RUN" == "1" ]]; then
+            log "  [dry-run] ${OFFLINE_RESULTS_DB_SOURCE} → ${host}:${destination}"
+        elif _is_local "$host"; then
+            sudo install -m 0444 "$OFFLINE_RESULTS_DB_SOURCE" "$destination"
+        else
+            local temporary="/tmp/${OFFLINE_RESULTS_DB_NAME}.$$"
+            scp -q "$OFFLINE_RESULTS_DB_SOURCE" "${host}:${temporary}"
+            _remote "$host" \
+                "sudo install -m 0444 '${temporary}' '${destination}' && rm -f '${temporary}'"
+        fi
+        log "  ✓ ${host}:${destination}"
+    done
+}
+
 label_nodes() {
     log "Setting Qonductor node labels and QPU resources …"
 
@@ -1216,6 +1270,7 @@ deploy_qonductor_controllers() {
     rendered_config="$(mktemp /tmp/qonductor-operator-config.XXXXXX.yaml)"
     sed -e "s|__SCHEDULING_INTERVAL__|${SCHEDULING_INTERVAL}|g" \
         -e "s|__SCHEDULING_THRESHOLD__|${SCHEDULING_THRESHOLD}|g" \
+        -e "s|__SCHEDULING_BATCH_SIZE__|${SCHEDULING_BATCH_SIZE}|g" \
         -e "s|__TRANSPILATION_WORKERS__|${TRANSPILATION_WORKERS}|g" \
         -e "s|__TRANSPILATION_CACHE_ENABLED__|${transpilation_cache_enabled_yaml}|g" \
         -e "s|__TRANSPILATION_CACHE_SIZE__|${TRANSPILATION_CACHE_SIZE}|g" \
@@ -1257,7 +1312,8 @@ deploy_qonductor_controllers() {
     fi
 
     log "  Operator resources: requests=${OPERATOR_CPU_REQUEST} CPU/${OPERATOR_MEMORY_REQUEST}, limits=${OPERATOR_CPU_LIMIT} CPU/${OPERATOR_MEMORY_LIMIT}"
-    log "  Quantum scheduler: interval=${SCHEDULING_INTERVAL}s, threshold=${SCHEDULING_THRESHOLD}, transpilation workers=${TRANSPILATION_WORKERS}, cache=${TRANSPILATION_CACHE_ENABLED}, cache size=${TRANSPILATION_CACHE_SIZE}"
+    log "  Quantum scheduler: interval=${SCHEDULING_INTERVAL}s, threshold=${SCHEDULING_THRESHOLD}, batch size=${SCHEDULING_BATCH_SIZE}, transpilation workers=${TRANSPILATION_WORKERS}, cache=${TRANSPILATION_CACHE_ENABLED}, cache size=${TRANSPILATION_CACHE_SIZE}"
+    log "  Quantum execution backend: ${QUANTUM_EXECUTION_BACKEND}"
 
     local rendered_operator
     rendered_operator="$(mktemp /tmp/qonductor-operator-deployment.XXXXXX.yaml)"
@@ -1268,9 +1324,12 @@ deploy_qonductor_controllers() {
         -e "s|__OPERATOR_MEMORY_LIMIT__|${OPERATOR_MEMORY_LIMIT}|g" \
         -e "s|__SCHEDULING_INTERVAL__|${SCHEDULING_INTERVAL}|g" \
         -e "s|__SCHEDULING_THRESHOLD__|${SCHEDULING_THRESHOLD}|g" \
+        -e "s|__SCHEDULING_BATCH_SIZE__|${SCHEDULING_BATCH_SIZE}|g" \
         -e "s|__TRANSPILATION_WORKERS__|${TRANSPILATION_WORKERS}|g" \
         -e "s|__TRANSPILATION_CACHE_ENABLED__|${TRANSPILATION_CACHE_ENABLED}|g" \
         -e "s|__TRANSPILATION_CACHE_SIZE__|${TRANSPILATION_CACHE_SIZE}|g" \
+        -e "s|__QUANTUM_EXECUTION_BACKEND__|${QUANTUM_EXECUTION_BACKEND}|g" \
+        -e "s|__OFFLINE_NOISE_MODEL_VERSION__|${OFFLINE_NOISE_MODEL_VERSION}|g" \
         "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"
 
     kubectl apply -f "$rendered_operator"
@@ -1374,6 +1433,7 @@ main() {
     # ---- Phase 6: Configure -------------------------------------------------
     _banner "Phase 6: Configure cluster"
     sync_qpu_profiles
+    sync_offline_results
     label_nodes
     deploy_qonductor_crds
     prepare_workflow_registry

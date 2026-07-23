@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-031-pure-quantum-qft-entangled-8-20260720174330-6478c15
+  name: pq-028-qft-entangled-8-20260722152725-6478c15
   namespace: default
   labels:
     app: qonductor
     algorithm: qft-entangled
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 9b79e489728f
+  workflowImageRef: '29ed60ef2c7a'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -364,7 +364,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 8
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/qft_entangled/spec_8.json

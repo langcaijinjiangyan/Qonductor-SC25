@@ -82,6 +82,9 @@ spec:
                   type: boolean
                   default: false
                   description: Trigger the quantum scheduler as soon as this job is enqueued.
+                preferredQPU:
+                  type: string
+                  description: Optional QPU affinity for iterative runtime jobs.
                 priority:
                   type: string
                   enum: [fidelity, jct, balanced]

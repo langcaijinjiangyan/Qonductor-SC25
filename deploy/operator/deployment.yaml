@@ -52,12 +52,18 @@ spec:
               value: "__SCHEDULING_INTERVAL__"
             - name: QONDUCTOR_SCHEDULING_THRESHOLD
               value: "__SCHEDULING_THRESHOLD__"
+            - name: QONDUCTOR_SCHEDULING_BATCH_SIZE
+              value: "__SCHEDULING_BATCH_SIZE__"
             - name: QONDUCTOR_TRANSPILATION_WORKERS
               value: "__TRANSPILATION_WORKERS__"
             - name: QONDUCTOR_TRANSPILATION_CACHE_ENABLED
               value: "__TRANSPILATION_CACHE_ENABLED__"
             - name: QONDUCTOR_TRANSPILATION_CACHE_SIZE
               value: "__TRANSPILATION_CACHE_SIZE__"
+            - name: QONDUCTOR_EXECUTION_BACKEND
+              value: "__QUANTUM_EXECUTION_BACKEND__"
+            - name: QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION
+              value: "__OFFLINE_NOISE_MODEL_VERSION__"
             - name: QISKIT_PARALLEL
               value: "False"
           resources:

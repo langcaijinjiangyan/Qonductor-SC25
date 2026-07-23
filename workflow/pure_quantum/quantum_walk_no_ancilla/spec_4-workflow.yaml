@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-050-pure-quantum-quantum-walk-no-ancilla-4-20260720174330-8
+  name: pq-044-quantum-walk-no-ancilla-4-20260722152725-8b3420f
   namespace: default
   labels:
     app: qonductor
     algorithm: quantum-walk-no-ancilla
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 876a0f7e6b15
+  workflowImageRef: '3fab65833bad'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -616,7 +616,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 4
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/quantum_walk_no_ancilla/spec_4.json

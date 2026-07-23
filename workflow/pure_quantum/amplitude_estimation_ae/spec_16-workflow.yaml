@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-002-pure-quantum-amplitude-estimation-ae-16-20260720174330
+  name: pq-002-amplitude-estimation-ae-16-20260722152725-3541ab1
   namespace: default
   labels:
     app: qonductor
     algorithm: amplitude-estimation-ae
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 7a5b10860173
+  workflowImageRef: '154fd4387ec2'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -1380,7 +1380,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 16
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/amplitude_estimation_ae/spec_16.json

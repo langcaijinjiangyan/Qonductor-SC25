@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-054-pure-quantum-random-circuit-2-20260720174330-afeba04
+  name: pq-048-random-circuit-2-20260722152725-afeba04
   namespace: default
   labels:
     app: qonductor
     algorithm: random-circuit
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 1ccc57068020
+  workflowImageRef: '55777f41217a'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -116,7 +116,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 2
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/random_circuit/spec_2.json

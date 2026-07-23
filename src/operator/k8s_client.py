@@ -50,6 +50,12 @@ QUANTUM_PAYLOAD_CONFIGMAP_MAX_BYTES = max(
 )
 QUANTUM_PAYLOAD_FILE_NAME = "payload.json"
 QUANTUM_PAYLOAD_MOUNT_PATH = "/etc/qonductor/payload"
+QUANTUM_EXECUTION_BACKENDS = {"aer", "offline-replay"}
+OFFLINE_RESULTS_HOST_PATH = "/etc/qonductor/offline-results"
+OFFLINE_RESULTS_DB_PATH = (
+    f"{OFFLINE_RESULTS_HOST_PATH}/quantum_offline_results.sqlite"
+)
+DEFAULT_OFFLINE_NOISE_MODEL_VERSION = "qpu-json-depolarizing-readout-v1"
 
 _MEMORY_UNITS = {
     "Ki": 1024,
@@ -1009,6 +1015,21 @@ def _qonductor_runtime_env() -> list[dict[str, str]]:
             "name": "QONDUCTOR_LOG_LEVEL",
             "value": os.environ.get("QONDUCTOR_LOG_LEVEL", "INFO"),
         },
+        {
+            "name": "QONDUCTOR_EXECUTION_BACKEND",
+            "value": os.environ.get("QONDUCTOR_EXECUTION_BACKEND", "aer"),
+        },
+        {
+            "name": "QONDUCTOR_OFFLINE_RESULTS_PATH",
+            "value": OFFLINE_RESULTS_DB_PATH,
+        },
+        {
+            "name": "QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION",
+            "value": os.environ.get(
+                "QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION",
+                DEFAULT_OFFLINE_NOISE_MODEL_VERSION,
+            ),
+        },
     ]
 
 
@@ -1189,6 +1210,21 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
     affinity = _classical_node_affinity(client, resources)
     if affinity:
         pod_spec["affinity"] = affinity
+    if os.environ.get(
+        "QONDUCTOR_EXECUTION_BACKEND", "aer"
+    ).strip().lower() == "offline-replay":
+        pod_spec["containers"][0].setdefault("volumeMounts", []).append({
+            "name": "offline-results",
+            "mountPath": OFFLINE_RESULTS_HOST_PATH,
+            "readOnly": True,
+        })
+        pod_spec.setdefault("volumes", []).append({
+            "name": "offline-results",
+            "hostPath": {
+                "path": OFFLINE_RESULTS_HOST_PATH,
+                "type": "Directory",
+            },
+        })
 
     job_manifest = {
         "apiVersion": "batch/v1",
@@ -1248,6 +1284,14 @@ def create_quantum_execution_job(
     qj_name = quantum_job_cr.get("metadata", {}).get("name", "")
     workflow_ref = qj_spec.get("workflowRef", "")
     step_id = qj_spec.get("stepId", "")
+    execution_backend = os.environ.get(
+        "QONDUCTOR_EXECUTION_BACKEND", "aer",
+    ).strip().lower()
+    if execution_backend not in QUANTUM_EXECUTION_BACKENDS:
+        raise ValueError(
+            "QONDUCTOR_EXECUTION_BACKEND must be one of "
+            f"{sorted(QUANTUM_EXECUTION_BACKENDS)}, got {execution_backend!r}"
+        )
     job_name = _rfc1123_name(
         "qonductor-q",
         step_id,
@@ -1269,6 +1313,25 @@ def create_quantum_execution_job(
         if param_binds:
             payload["parameter_binds"] = param_binds
         circuit_payload = [payload]
+
+    raw_qasm = qj_spec.get("circuitQasm", "")
+    if execution_backend == "offline-replay":
+        if not raw_qasm:
+            raise ValueError(
+                "offline-replay requires QuantumJob.spec.circuitQasm"
+            )
+        if len(circuit_payload) != 1:
+            raise ValueError(
+                "offline-replay currently requires exactly one circuit per "
+                "QuantumJob"
+            )
+        circuit_payload[0]["offline_lookup"] = {
+            "qasm_sha256": hashlib.sha256(
+                raw_qasm.encode("utf-8"),
+            ).hexdigest(),
+            "parameter_bindings": qj_spec.get("parameterBindings", {}) or {},
+            "logical_id": qj_spec.get("logicalCircuitId", ""),
+        }
     circuit_format = circuit_payload[0]["format"] if circuit_payload else "qasm2"
     payload_json = json.dumps(circuit_payload)
     payload_size = len(payload_json.encode("utf-8"))
@@ -1350,6 +1413,15 @@ def create_quantum_execution_job(
                             {"name": "QUANTUM_JOB_NAME", "value": qj_name},
                             {"name": "QONDUCTOR_WORKFLOW_NAME", "value": workflow_ref},
                             {"name": "QPU_NAME", "value": qpu_name},
+                            {"name": "QONDUCTOR_EXECUTION_BACKEND",
+                             "value": execution_backend},
+                            {"name": "QONDUCTOR_OFFLINE_RESULTS_PATH",
+                             "value": OFFLINE_RESULTS_DB_PATH},
+                            {"name": "QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION",
+                             "value": os.environ.get(
+                                 "QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION",
+                                 DEFAULT_OFFLINE_NOISE_MODEL_VERSION,
+                             )},
                             {"name": "QPU_JSON_PATH",
                              "value": f"/etc/qonductor/qpus/{qpu_name}.json"},
                             {"name": "CIRCUIT_PAYLOAD_PATH",
@@ -1401,6 +1473,21 @@ def create_quantum_execution_job(
             },
         },
     }
+
+    if execution_backend == "offline-replay":
+        pod_spec = job_manifest["spec"]["template"]["spec"]
+        pod_spec["containers"][0]["volumeMounts"].append({
+            "name": "offline-results",
+            "mountPath": OFFLINE_RESULTS_HOST_PATH,
+            "readOnly": True,
+        })
+        pod_spec["volumes"].append({
+            "name": "offline-results",
+            "hostPath": {
+                "path": OFFLINE_RESULTS_HOST_PATH,
+                "type": "Directory",
+            },
+        })
     return client.create_job(job_manifest, namespace=namespace)
 
 def create_quantum_job_cr(step_node, workflow_cr: dict,
@@ -1447,6 +1534,8 @@ def create_quantum_job_cr(step_node, workflow_cr: dict,
         "evalLabel": "evalLabel",
         "schedule_immediately": "scheduleImmediately",
         "scheduleImmediately": "scheduleImmediately",
+        "preferred_qpu": "preferredQPU",
+        "preferredQPU": "preferredQPU",
     }
     for source_key, spec_key in optional_fields.items():
         if source_key in metadata and metadata[source_key] is not None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -115,6 +117,46 @@ def test_quantum_execution_job_mounts_payload_configmap():
     volumes = job["spec"]["template"]["spec"]["volumes"]
     payload_volume = next(v for v in volumes if v["name"] == "circuit-payload")
     assert payload_volume["configMap"]["name"] == configmaps[0]["metadata"]["name"]
+
+
+def test_quantum_execution_job_configures_offline_replay(monkeypatch):
+    monkeypatch.setenv("QONDUCTOR_EXECUTION_BACKEND", "offline-replay")
+    client = k8s_client.K8sClient(mode="local")
+    scheduling_job = SimpleNamespace(circuits=[], shots=1024)
+    backend = SimpleNamespace(name="qpu0_27q")
+    qasm = "OPENQASM 3;\nqubit q;\nbit c;\nc = measure q;\n"
+    quantum_job = _quantum_job_cr(qasm)
+    quantum_job["spec"]["parameterBindings"] = {"_θ_0_": 0.25}
+
+    job_name = k8s_client.create_quantum_execution_job(
+        scheduling_job,
+        backend,
+        quantum_job,
+        mode="local",
+        client_override=client,
+    )
+
+    job = client._store.get("jobs", job_name)
+    pod_spec = job["spec"]["template"]["spec"]
+    container = pod_spec["containers"][0]
+    env = {item["name"]: item["value"] for item in container["env"]}
+    assert env["QONDUCTOR_EXECUTION_BACKEND"] == "offline-replay"
+    assert env["QONDUCTOR_OFFLINE_RESULTS_PATH"] == (
+        k8s_client.OFFLINE_RESULTS_DB_PATH
+    )
+    assert any(
+        mount["name"] == "offline-results"
+        for mount in container["volumeMounts"]
+    )
+    assert any(volume["name"] == "offline-results" for volume in pod_spec["volumes"])
+
+    configmap = client._store.list_configmaps("component=quantum-payload")[0]
+    payload = json.loads(
+        configmap["data"][k8s_client.QUANTUM_PAYLOAD_FILE_NAME]
+    )
+    lookup = payload[0]["offline_lookup"]
+    assert lookup["qasm_sha256"] == hashlib.sha256(qasm.encode()).hexdigest()
+    assert lookup["parameter_bindings"] == {"_θ_0_": 0.25}
 
 
 def test_quantum_execution_job_rejects_payload_over_configmap_limit():

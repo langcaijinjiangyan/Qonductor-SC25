@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: cov-037-pure-quantum-quantum-fourier-transformation-qft-8-20260
+  name: pq-033-quantum-fourier-transformation-qft-8-20260722152725-1b0c
   namespace: default
   labels:
     app: qonductor
     algorithm: quantum-fourier-transformation-qft
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: fe9d53d3ea30
+  workflowImageRef: 'b4b2a8693701'
   priority: balanced
   maxRetries: 3
   containers: []
@@ -348,7 +348,7 @@ spec:
         '
       circuitFormat: qasm3
       qubits: 8
-      shots: 128
+      shots: 1024
       priority: balanced
       source:
         qslurmSource: qslurm_workloads/pure_quantum/quantum_fourier_transformation_qft/spec_8.json
