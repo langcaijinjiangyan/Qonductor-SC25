@@ -20,7 +20,7 @@ data:
 
     # Transpilation settings
     transpilation-level: pre-transpiled
-    transpilation-count: 10
+    transpilation-count: __TRANSPILATION_COUNT__
     transpilation-workers: __TRANSPILATION_WORKERS__
     transpilation-cache-enabled: __TRANSPILATION_CACHE_ENABLED__
     transpilation-cache-size: __TRANSPILATION_CACHE_SIZE__

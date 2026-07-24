@@ -53,8 +53,8 @@ agents:
     memory: 2g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
     qpus:                           # QPU profiles from ../qpus/
-      - qpu0_27q.json
-      - qpu2_27q.json
+      - qpu_f975_27q.json
+      - qpu_f975_27q.json
 
   - host: 192.168.36.131            # physical host IP (SSH target)
     containerName: k3s-agent-2      # Docker container name
@@ -63,8 +63,8 @@ agents:
     memory: 2g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
     qpus:
-      - qpu0_27q.json
-      - qpu2_27q.json
+      - qpu_f975_27q.json
+      - qpu_f975_27q.json
 
   - host: 192.168.36.130            # physical host IP (SSH target)
     containerName: k3s-agent-3      # Docker container name
@@ -73,8 +73,8 @@ agents:
     memory: 2g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
     qpus:
-      - qpu0_27q.json
-      - qpu2_27q.json
+      - qpu_f975_27q.json
+      - qpu_f985_27q.json
 
 
   - host: 192.168.36.132            # physical host IP (SSH target)
@@ -84,5 +84,16 @@ agents:
     memory: 2g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
     qpus:
-      - qpu0_27q.json
-      - qpu2_27q.json 
+      - qpu_f980_27q.json
+      - qpu_f980_27q.json
+
+
+
+
+
+      # qn8
+      # - qpu_f980_27q.json
+      # - qpu_f980_27q.json
+      # - qpu_f975_27q.json
+      # - qpu_f975_27q.json
+      # - qpu_f975_27q.json

@@ -1,0 +1,1059 @@
+{
+  "schema_version": "qpu-config-v1",
+  "profile_version": "v1",
+  "name": "qpu_f980_27q",
+  "max_qubits": 27,
+  "coupling_map": [
+    [
+      0,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      1,
+      4
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      3,
+      5
+    ],
+    [
+      4,
+      7
+    ],
+    [
+      5,
+      8
+    ],
+    [
+      6,
+      7
+    ],
+    [
+      7,
+      10
+    ],
+    [
+      8,
+      9
+    ],
+    [
+      8,
+      11
+    ],
+    [
+      10,
+      12
+    ],
+    [
+      11,
+      14
+    ],
+    [
+      12,
+      13
+    ],
+    [
+      12,
+      15
+    ],
+    [
+      13,
+      14
+    ],
+    [
+      14,
+      16
+    ],
+    [
+      15,
+      18
+    ],
+    [
+      16,
+      19
+    ],
+    [
+      17,
+      18
+    ],
+    [
+      18,
+      21
+    ],
+    [
+      19,
+      20
+    ],
+    [
+      19,
+      22
+    ],
+    [
+      21,
+      23
+    ],
+    [
+      22,
+      25
+    ],
+    [
+      23,
+      24
+    ],
+    [
+      24,
+      25
+    ],
+    [
+      25,
+      26
+    ]
+  ],
+  "hardware": {
+    "calibration_version": "dataset-f980-mapped-v1",
+    "directed_edges": false,
+    "native_single_qubit_gates": [
+      "rz",
+      "sx",
+      "x",
+      "id"
+    ],
+    "native_two_qubit_gate": "cx",
+    "qubits": [
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00028518,
+          "x": 0.00038499,
+          "id": 0.00021389
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.05969552,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.05969552,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00012331,
+          "x": 0.00016646,
+          "id": 9.249e-05
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.01595822,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.01595822,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00022408,
+          "x": 0.00030251,
+          "id": 0.00016806
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02541493,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02541493,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018718,
+          "x": 0.00025269,
+          "id": 0.00014038
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02600598,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02600598,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00041125,
+          "x": 0.00055518,
+          "id": 0.00030844
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02659702,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02659702,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00013911,
+          "x": 0.0001878,
+          "id": 0.00010433
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02896119,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02896119,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00021307,
+          "x": 0.00028764,
+          "id": 0.0001598
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.07033432,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.07033432,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00030829,
+          "x": 0.00041619,
+          "id": 0.00023122
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.01595822,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.01595822,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0003467,
+          "x": 0.00046805,
+          "id": 0.00026003
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.0171403,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.0171403,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00060026,
+          "x": 0.00081035,
+          "id": 0.00045019
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.07683582,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.07683582,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00017919,
+          "x": 0.00024191,
+          "id": 0.00013439
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.03014328,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.03014328,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00033324,
+          "x": 0.00044987,
+          "id": 0.00024993
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.03250745,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.03250745,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018799,
+          "x": 0.00025378,
+          "id": 0.00014099
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.01891343,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.01891343,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00072923,
+          "x": 0.00098446,
+          "id": 0.00054692
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.03309852,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.03309852,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00028112,
+          "x": 0.00037952,
+          "id": 0.00021085
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.01950448,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.01950448,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0008972,
+          "x": 0.00121122,
+          "id": 0.0006729
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.03605374,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.03605374,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00035686,
+          "x": 0.00048176,
+          "id": 0.00026765
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.04255521,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.04255521,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00030393,
+          "x": 0.00041029,
+          "id": 0.00022794
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.08688358,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.08688358,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00018217,
+          "x": 0.00024593,
+          "id": 0.00013663
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02127761,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02127761,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0001936,
+          "x": 0.00026136,
+          "id": 0.0001452
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02245969,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02245969,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00038644,
+          "x": 0.00052169,
+          "id": 0.00028983
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.12648357,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.12648357,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00076947,
+          "x": 0.00103878,
+          "id": 0.0005771
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.04137313,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.04137313,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.0006446,
+          "x": 0.00087022,
+          "id": 0.00048345
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.0461015,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.0461015,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00034688,
+          "x": 0.00046828,
+          "id": 0.00026015
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.0502388,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.0502388,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00022697,
+          "x": 0.00030642,
+          "id": 0.00017023
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.05378508,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.05378508,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00016532,
+          "x": 0.00022318,
+          "id": 0.00012399
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.02482389,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.02482389,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      },
+      {
+        "single_gate_duration_ns": {
+          "rz": 0.0,
+          "sx": 25.44,
+          "x": 25.44,
+          "id": 25.44
+        },
+        "single_gate_error": {
+          "rz": 0.0,
+          "sx": 0.00015494,
+          "x": 0.00020917,
+          "id": 0.0001162
+        },
+        "readout_duration_ns": 1696.0,
+        "readout_error": 0.13889553,
+        "reset_duration_ns": 1696.0,
+        "reset_error": 0.13889553,
+        "t1_ns": 76000.0,
+        "t2_ns": 66500.0
+      }
+    ],
+    "edges": [
+      {
+        "source": 1,
+        "target": 2,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.00862779
+      },
+      {
+        "source": 1,
+        "target": 4,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.00887024
+      },
+      {
+        "source": 4,
+        "target": 7,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.00912394
+      },
+      {
+        "source": 5,
+        "target": 8,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.00942133
+      },
+      {
+        "source": 7,
+        "target": 10,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.00969619
+      },
+      {
+        "source": 8,
+        "target": 11,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.00999083
+      },
+      {
+        "source": 10,
+        "target": 12,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.0103126
+      },
+      {
+        "source": 11,
+        "target": 14,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01071322
+      },
+      {
+        "source": 12,
+        "target": 13,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01105818
+      },
+      {
+        "source": 12,
+        "target": 15,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01148011
+      },
+      {
+        "source": 13,
+        "target": 14,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01191875
+      },
+      {
+        "source": 14,
+        "target": 16,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01212389
+      },
+      {
+        "source": 15,
+        "target": 18,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01233985
+      },
+      {
+        "source": 16,
+        "target": 19,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01272619
+      },
+      {
+        "source": 18,
+        "target": 21,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01347825
+      },
+      {
+        "source": 19,
+        "target": 22,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01398775
+      },
+      {
+        "source": 22,
+        "target": 25,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01509439
+      },
+      {
+        "source": 24,
+        "target": 25,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01577256
+      },
+      {
+        "source": 0,
+        "target": 1,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01631337
+      },
+      {
+        "source": 2,
+        "target": 3,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01720438
+      },
+      {
+        "source": 3,
+        "target": 5,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01850044
+      },
+      {
+        "source": 6,
+        "target": 7,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01931486
+      },
+      {
+        "source": 8,
+        "target": 9,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.01990782
+      },
+      {
+        "source": 17,
+        "target": 18,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.02139062
+      },
+      {
+        "source": 19,
+        "target": 20,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.02292759
+      },
+      {
+        "source": 21,
+        "target": 23,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.02686178
+      },
+      {
+        "source": 23,
+        "target": 24,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.03016449
+      },
+      {
+        "source": 25,
+        "target": 26,
+        "gate": "cx",
+        "duration_ns": 76.32,
+        "error": 0.0378286
+      }
+    ]
+  },
+  "provenance": {
+    "source_dataset": "qiskit-calibration-drift",
+    "source_backend": "ibm_marrakesh",
+    "source_observed_time": "2026-03-11 06:49:02.864201+00:00",
+    "source_summary": {
+      "f1": 0.9739206578504096,
+      "f2": 0.9614268411551985,
+      "fm": 0.9675856370192307,
+      "overall": 0.9676443786749463,
+      "sx_count": 156,
+      "readout_count": 156,
+      "cz_count": 352,
+      "t1_count": 0,
+      "t2_count": 0
+    },
+    "topology_reference": "D:\\qslurm_share\\configs\\qpus\\default_27q.json",
+    "mapped_native_two_qubit_gate": "cx",
+    "source_native_two_qubit_gate": "cz_gate_error/cz_gate_length",
+    "derivations": {
+      "x_gate_error": "derived from max(sx_gate_error*1.35, id_gate_error*1.10)",
+      "x_gate_length": "derived from rx_gate_length when x_gate_length is absent",
+      "reset_error": "derived from mean(prob_meas0_prep1, prob_meas1_prep0), fallback readout_error*0.5",
+      "missing_T1_T2": "filled with snapshot medians when absent"
+    },
+    "mapped_qubits": {
+      "1": 35,
+      "7": 86,
+      "8": 122,
+      "12": 93,
+      "14": 78,
+      "18": 4,
+      "19": 129,
+      "25": 155,
+      "2": 98,
+      "3": 149,
+      "4": 42,
+      "5": 53,
+      "10": 131,
+      "11": 123,
+      "13": 145,
+      "15": 117,
+      "16": 103,
+      "21": 77,
+      "22": 68,
+      "23": 95,
+      "24": 142,
+      "0": 127,
+      "6": 11,
+      "9": 31,
+      "17": 60,
+      "20": 18,
+      "26": 40
+    },
+    "mapped_edges": {
+      "1-2": [
+        112,
+        113
+      ],
+      "1-4": [
+        94,
+        95
+      ],
+      "4-7": [
+        142,
+        143
+      ],
+      "5-8": [
+        43,
+        44
+      ],
+      "7-10": [
+        69,
+        78
+      ],
+      "8-11": [
+        33,
+        39
+      ],
+      "10-12": [
+        86,
+        87
+      ],
+      "11-14": [
+        131,
+        132
+      ],
+      "12-13": [
+        145,
+        146
+      ],
+      "12-15": [
+        131,
+        138
+      ],
+      "13-14": [
+        128,
+        129
+      ],
+      "14-16": [
+        126,
+        127
+      ],
+      "15-18": [
+        153,
+        154
+      ],
+      "16-19": [
+        154,
+        155
+      ],
+      "18-21": [
+        125,
+        126
+      ],
+      "19-22": [
+        16,
+        23
+      ],
+      "22-25": [
+        107,
+        108
+      ],
+      "24-25": [
+        100,
+        101
+      ],
+      "0-1": [
+        101,
+        116
+      ],
+      "2-3": [
+        61,
+        62
+      ],
+      "3-5": [
+        29,
+        38
+      ],
+      "6-7": [
+        83,
+        84
+      ],
+      "8-9": [
+        25,
+        37
+      ],
+      "17-18": [
+        84,
+        85
+      ],
+      "19-20": [
+        65,
+        66
+      ],
+      "21-23": [
+        89,
+        90
+      ],
+      "23-24": [
+        24,
+        25
+      ],
+      "25-26": [
+        42,
+        43
+      ]
+    },
+    "units": {
+      "cz_gate_error": null,
+      "prob_meas0_prep1": null,
+      "prob_meas1_prep0": null,
+      "readout_error": null,
+      "sx_gate_error": null
+    },
+    "target_bucket": {
+      "overall": 0.98,
+      "f1_target": 0.9996125,
+      "f2_target": 0.9843875,
+      "fm_target": 0.956
+    },
+    "normalization": {
+      "single_scale": 0.8712707841754846,
+      "twoq_scale": 5.4939026666195865,
+      "readout_scale": 2.4209194338186766,
+      "duration_scale": 1.06,
+      "coherence_scale": 0.9500000000000001
+    }
+  }
+}

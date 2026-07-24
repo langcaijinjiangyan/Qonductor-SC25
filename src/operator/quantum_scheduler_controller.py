@@ -108,6 +108,7 @@ class QuantumSchedulerController:
         scheduling_batch_size: int = 120,
         transpilation_cache_enabled: bool = True,
         transpilation_cache_size: int = 256,
+        transpilation_count: int = 10,
     ) -> None:
         self.mode = mode
         self.k8s = K8sClient(mode=mode)
@@ -123,6 +124,7 @@ class QuantumSchedulerController:
                 problem_type=ProblemType.DISCRETE,
                 transpilation_cache_enabled=transpilation_cache_enabled,
                 transpilation_cache_size=transpilation_cache_size,
+                transpilation_count=transpilation_count,
             )
         else:
             self.scheduler = None

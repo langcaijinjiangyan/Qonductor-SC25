@@ -60,6 +60,8 @@ spec:
               value: "__TRANSPILATION_CACHE_ENABLED__"
             - name: QONDUCTOR_TRANSPILATION_CACHE_SIZE
               value: "__TRANSPILATION_CACHE_SIZE__"
+            - name: QONDUCTOR_TRANSPILATION_COUNT
+              value: "__TRANSPILATION_COUNT__"
             - name: QONDUCTOR_EXECUTION_BACKEND
               value: "__QUANTUM_EXECUTION_BACKEND__"
             - name: QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION

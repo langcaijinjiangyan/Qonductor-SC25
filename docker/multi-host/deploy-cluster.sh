@@ -89,6 +89,7 @@ SCHEDULING_BATCH_SIZE="${SCHEDULING_BATCH_SIZE:-120}"
 TRANSPILATION_WORKERS="${TRANSPILATION_WORKERS:-8}"
 TRANSPILATION_CACHE_ENABLED="${TRANSPILATION_CACHE_ENABLED:-1}"
 TRANSPILATION_CACHE_SIZE="${TRANSPILATION_CACHE_SIZE:-256}"
+TRANSPILATION_COUNT="${TRANSPILATION_COUNT:-1}"
 QUANTUM_EXECUTION_BACKEND="${QONDUCTOR_EXECUTION_BACKEND:-offline-replay}"
 OFFLINE_RESULTS_DB_SOURCE="${OFFLINE_RESULTS_DB_SOURCE:-${PROJECT_ROOT}/data/offline_results/quantum_offline_results.sqlite}"
 OFFLINE_RESULTS_HOST_DIR="/etc/qonductor/offline-results"
@@ -1274,6 +1275,7 @@ deploy_qonductor_controllers() {
         -e "s|__TRANSPILATION_WORKERS__|${TRANSPILATION_WORKERS}|g" \
         -e "s|__TRANSPILATION_CACHE_ENABLED__|${transpilation_cache_enabled_yaml}|g" \
         -e "s|__TRANSPILATION_CACHE_SIZE__|${TRANSPILATION_CACHE_SIZE}|g" \
+        -e "s|__TRANSPILATION_COUNT__|${TRANSPILATION_COUNT}|g" \
         "${DEPLOY_DIR}/operator/configmap.yaml" > "$rendered_config"
     kubectl apply -f "$rendered_config"
     rm -f "$rendered_config"
@@ -1312,7 +1314,7 @@ deploy_qonductor_controllers() {
     fi
 
     log "  Operator resources: requests=${OPERATOR_CPU_REQUEST} CPU/${OPERATOR_MEMORY_REQUEST}, limits=${OPERATOR_CPU_LIMIT} CPU/${OPERATOR_MEMORY_LIMIT}"
-    log "  Quantum scheduler: interval=${SCHEDULING_INTERVAL}s, threshold=${SCHEDULING_THRESHOLD}, batch size=${SCHEDULING_BATCH_SIZE}, transpilation workers=${TRANSPILATION_WORKERS}, cache=${TRANSPILATION_CACHE_ENABLED}, cache size=${TRANSPILATION_CACHE_SIZE}"
+    log "  Quantum scheduler: interval=${SCHEDULING_INTERVAL}s, threshold=${SCHEDULING_THRESHOLD}, batch size=${SCHEDULING_BATCH_SIZE}, transpilation workers=${TRANSPILATION_WORKERS}, cache=${TRANSPILATION_CACHE_ENABLED}, cache size=${TRANSPILATION_CACHE_SIZE}, transpilation count=${TRANSPILATION_COUNT}"
     log "  Quantum execution backend: ${QUANTUM_EXECUTION_BACKEND}"
 
     local rendered_operator
@@ -1328,6 +1330,7 @@ deploy_qonductor_controllers() {
         -e "s|__TRANSPILATION_WORKERS__|${TRANSPILATION_WORKERS}|g" \
         -e "s|__TRANSPILATION_CACHE_ENABLED__|${TRANSPILATION_CACHE_ENABLED}|g" \
         -e "s|__TRANSPILATION_CACHE_SIZE__|${TRANSPILATION_CACHE_SIZE}|g" \
+        -e "s|__TRANSPILATION_COUNT__|${TRANSPILATION_COUNT}|g" \
         -e "s|__QUANTUM_EXECUTION_BACKEND__|${QUANTUM_EXECUTION_BACKEND}|g" \
         -e "s|__OFFLINE_NOISE_MODEL_VERSION__|${OFFLINE_NOISE_MODEL_VERSION}|g" \
         "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"

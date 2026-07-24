@@ -1097,6 +1097,12 @@ def main() -> None:
         "transpilation-cache-size",
         256,
     )
+    transpilation_count = _positive_int_config(
+        operator_config,
+        "QONDUCTOR_TRANSPILATION_COUNT",
+        "transpilation-count",
+        10,
+    )
     metrics_port = _positive_int_config(
         operator_config,
         "QONDUCTOR_METRICS_PORT",
@@ -1111,6 +1117,7 @@ def main() -> None:
         scheduling_batch_size=scheduling_batch_size,
         transpilation_cache_enabled=transpilation_cache_enabled,
         transpilation_cache_size=transpilation_cache_size,
+        transpilation_count=transpilation_count,
     )
     quantum_thread = threading.Thread(
         target=quantum_controller.run,
