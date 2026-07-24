@@ -1,0 +1,75 @@
+{
+  "arrival_mode": "poisson",
+  "corpus_index_path": "/mnt/qslurm_share/experiments/common_workloads/corpus/mqtbench2_20/corpus_index.json",
+  "estimated_total_qpu_work_ms": 10031.66,
+  "excluded_benchmark_qubits": [
+    {
+      "benchmark_name": "grover_no_ancilla",
+      "requested_qubits": 8
+    },
+    {
+      "benchmark_name": "quantum_walk_no_ancilla",
+      "requested_qubits": 8
+    }
+  ],
+  "excluded_hybrid_categories": [],
+  "generator_version": "1",
+  "hybrid_category_counts": {
+    "efficient_su2_ansatz_with_random_parameters": 37,
+    "quantum_approximation_optimization_algorithm_qaoa": 37,
+    "real_amplitudes_ansatz_with_random_parameters": 38,
+    "two_local_ansatz_with_random_parameters": 38
+  },
+  "hybrid_job_count": 150,
+  "hybrid_job_ratio": 0.2,
+  "hybrid_subdir": "hybrid",
+  "manifest_sha256": "6e706b7c9ac7f19df8abe138cdd15aff73e3157078aba7bf38b9ef9036518d73",
+  "missing_specs": [],
+  "mixed_hybrid_arrival_policy": {
+    "end_fraction": 0.72,
+    "hybrid_job_count": 150,
+    "mode": "early_staggered_with_deterministic_jitter",
+    "start_fraction": 0.04
+  },
+  "pure_category_counts": {
+    "amplitude_estimation_ae": 55,
+    "deutsch_jozsa": 55,
+    "ghz_state": 55,
+    "graph_state": 55,
+    "grover_no_ancilla": 19,
+    "grover_v_chain": 19,
+    "qft_entangled": 54,
+    "quantum_fourier_transformation_qft": 54,
+    "quantum_phase_estimation_qpe_exact": 54,
+    "quantum_phase_estimation_qpe_inexact": 54,
+    "quantum_walk_no_ancilla": 18,
+    "random_circuit": 54,
+    "w_state": 54
+  },
+  "pure_job_count": 600,
+  "pure_job_ratio": 0.8,
+  "runtime_estimation_method_counts": {
+    "qasm_gate_proxy_v1": 750
+  },
+  "schema_version": 1,
+  "seed": 7104,
+  "shuffle_submit_order": true,
+  "size_bucket_counts": {
+    "large": 0,
+    "medium": 360,
+    "small": 240
+  },
+  "size_bucket_ratios": {
+    "large": 0.0,
+    "medium": 0.6,
+    "small": 0.4
+  },
+  "submission_rate_jobs_per_sec": 0.4166666666666667,
+  "submit_window_sec": 1800.0,
+  "total_jobs": 750,
+  "trace_sha256": "440a8fd753722f9c0683b866a03b7dc7a7ed97348306634bb2893511176055a6",
+  "warnings": [
+    "poisson arrivals normalized to fit submit_window_sec",
+    "mixed750 hybrid arrivals were staggered across an early broad submit-window band"
+  ]
+}
