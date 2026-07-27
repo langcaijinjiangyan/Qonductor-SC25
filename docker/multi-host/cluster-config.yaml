@@ -79,13 +79,12 @@ agents:
 
   - host: 192.168.36.132            # physical host IP (SSH target)
     containerName: k3s-agent-4      # Docker container name
-    nodeName: quantum-worker-4    # Kubernetes node name
-    nodeType: quantum             # Qonductor node role label
+    nodeName: classical-worker-1    # Kubernetes node name
+    nodeType: classical             # Qonductor node role label
     memory: 2g                      # RAM to allocate
     cpus: 2                         # CPU cores to allocate
-    qpus:
-      - qpu_f980_27q.json
-      - qpu_f980_27q.json
+    qpus: []
+
 
 
 

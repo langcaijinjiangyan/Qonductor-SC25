@@ -97,9 +97,28 @@ def offline_parameter_pair(
         "qpu-json-depolarizing-readout-v1",
     )
     qpu_candidates = [qpu_name]
-    match = re.match(r"^(qpu\d+_\d+q)(?:-|$)", qpu_name)
+    match = re.match(r"^(qpu[a-z_]*\d+_\d+q)(?:-|$)", qpu_name)
     if match and match.group(1) not in qpu_candidates:
         qpu_candidates.append(match.group(1))
+    # Fall back to qonductor_base_name from the QPU JSON profile when the
+    # regex extraction fails (mirrors the executor's resolution order).
+    if len(qpu_candidates) == 1:
+        qpu_json_path = os.environ.get(
+            "QPU_JSON_PATH",
+            f"/etc/qonductor/qpus/{qpu_name}.json",
+        )
+        try:
+            with open(qpu_json_path, encoding="utf-8") as fh:
+                qpu_data = json.load(fh)
+            base_name = str(
+                qpu_data.get("qonductor_base_name")
+                or qpu_data.get("offline_results_qpu_name")
+                or ""
+            )
+            if base_name and base_name not in qpu_candidates:
+                qpu_candidates.append(base_name)
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
 
     connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     try:

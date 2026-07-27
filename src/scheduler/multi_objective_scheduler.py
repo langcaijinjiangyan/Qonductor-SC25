@@ -46,6 +46,44 @@ from src.utils.benchmark import load_pre_transpiled_circuit
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Monkey-patch Qiskit 0.45.3 BasisSearchVisitor to survive None edges in the
+# equivalence-library graph.  Without this, circuits whose gate set is already
+# a subset of the target basis can still crash inside _basis_search.
+# ---------------------------------------------------------------------------
+def _patch_basis_search_visitor() -> None:
+    try:
+        from qiskit.transpiler.passes.basis.basis_translator import (
+            BasisSearchVisitor,
+        )
+
+        _original_init = BasisSearchVisitor.__init__
+
+        def _patched_init(self, graph, source_basis, target_basis):
+            self.graph = graph
+            self.target_basis = set(target_basis)
+            self._source_gates_remain = set(source_basis)
+            self._num_gates_remain_for_rule = {}
+            save_index = -1
+            for edata in self.graph.edges():
+                if edata is None:
+                    continue
+                if save_index == edata.index:
+                    continue
+                self._num_gates_remain_for_rule[edata.index] = edata.num_gates
+                save_index = edata.index
+            self._basis_transforms = []
+            self._predecessors = {}
+            self._opt_cost_map = {}
+
+        BasisSearchVisitor.__init__ = _patched_init
+    except Exception:
+        pass
+
+
+_patch_basis_search_visitor()
+
+
 def _safe_backend_name(backend: Backend) -> str:
     return getattr(backend, "name", "<unknown>")
 
@@ -543,6 +581,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                 transpiled_circuits = transpile(
                     [circuit] * self.transpilation_count,
                     backend=backend,
+                    basis_gates=["rz", "sx", "x", "id", "cx"],
                     optimization_level=3,
                 )
             except Exception:
@@ -596,6 +635,7 @@ class MultiObjectiveScheduler(BaseScheduler):
                         deflated_circuit,
                         backend=backend,
                         initial_layout=best_layout,
+                        basis_gates=["rz", "sx", "x", "id", "cx"],
                         optimization_level=0,
                     )
                 except Exception:

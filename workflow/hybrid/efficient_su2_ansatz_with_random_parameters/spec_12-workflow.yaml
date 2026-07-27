@@ -1,14 +1,14 @@
 apiVersion: qonductor.io/v1
 kind: HybridWorkflow
 metadata:
-  name: verify-su2-2iter-20260720211748
+  name: efficient-su2-ansatz-with-random-parameters-spec-12-dynamic
   namespace: default
   labels:
     app: qonductor
     algorithm: vqe-su2
     converted_from: qslurm_workloads
 spec:
-  workflowImageRef: 742808966d1d
+  workflowImageRef: '24701d4f28a8'
   priority: balanced
   maxRetries: 3
   containers:
@@ -29,7 +29,7 @@ spec:
   workflowInputs:
     vqe_su2:
       logicalCircuitId: su2random_indep_qiskit_12
-      qasmPath: /home/reol/Qonductor-SC25/workflow/efficient_su2_ansatz_with_random_parameters/su2random_indep_qiskit_12.qasm3
+      qasmPath: /home/reol/Qonductor-SC25/workflow/hybrid/efficient_su2_ansatz_with_random_parameters/su2random_indep_qiskit_12.qasm3
       circuitQasm: "OPENQASM 3.0;\ninclude \"stdgates.inc\";\ninput float[64] _\u03B8\
         _0_;\ninput float[64] _\u03B8_1_;\ninput float[64] _\u03B8_2_;\ninput float[64]\
         \ _\u03B8_3_;\ninput float[64] _\u03B8_4_;\ninput float[64] _\u03B8_5_;\n\
@@ -213,14 +213,14 @@ spec:
       qubits: 12
       clbits: 12
       shots: 16
-      maxIterations: 2
+      maxIterations: 1
       quantumTimeoutSeconds: 21600.0
       priority: balanced
       seed: 12345
       source:
-        workloadDir: /home/reol/Qonductor-SC25/workflow/efficient_su2_ansatz_with_random_parameters
-        spec: /home/reol/Qonductor-SC25/workflow/efficient_su2_ansatz_with_random_parameters/spec_12.json
-        parameters: /home/reol/Qonductor-SC25/workflow/efficient_su2_ansatz_with_random_parameters/parameters_12.json
+        workloadDir: /home/reol/Qonductor-SC25/workflow/hybrid/efficient_su2_ansatz_with_random_parameters
+        spec: /home/reol/Qonductor-SC25/workflow/hybrid/efficient_su2_ansatz_with_random_parameters/spec_12.json
+        parameters: /home/reol/Qonductor-SC25/workflow/hybrid/efficient_su2_ansatz_with_random_parameters/parameters_12.json
       objective: ising_energy
       hamiltonian:
         hField:
