@@ -1,0 +1,75 @@
+{
+  "arrival_mode": "poisson",
+  "corpus_index_path": "/mnt/qslurm_share/experiments/common_workloads/corpus/mqtbench2_20/corpus_index.json",
+  "estimated_total_qpu_work_ms": 9736.75,
+  "excluded_benchmark_qubits": [
+    {
+      "benchmark_name": "grover_no_ancilla",
+      "requested_qubits": 8
+    },
+    {
+      "benchmark_name": "quantum_walk_no_ancilla",
+      "requested_qubits": 8
+    }
+  ],
+  "excluded_hybrid_categories": [],
+  "generator_version": "1",
+  "hybrid_category_counts": {
+    "efficient_su2_ansatz_with_random_parameters": 6,
+    "quantum_approximation_optimization_algorithm_qaoa": 6,
+    "real_amplitudes_ansatz_with_random_parameters": 6,
+    "two_local_ansatz_with_random_parameters": 7
+  },
+  "hybrid_job_count": 25,
+  "hybrid_job_ratio": 0.016666666666666666,
+  "hybrid_subdir": "hybrid",
+  "manifest_sha256": "790c4373170037eef32068578df2f06bc960793fc1ef51850f385de08c1a2b53",
+  "missing_specs": [],
+  "mixed_hybrid_arrival_policy": {
+    "hybrid_job_count": 25,
+    "hybrid_slot_eligibility_fraction": 0.85,
+    "mode": "uniform_random_preserve_arrival_slots",
+    "preserves_submit_rate": true
+  },
+  "pure_category_counts": {
+    "amplitude_estimation_ae": 135,
+    "deutsch_jozsa": 135,
+    "ghz_state": 135,
+    "graph_state": 135,
+    "grover_no_ancilla": 46,
+    "grover_v_chain": 45,
+    "qft_entangled": 134,
+    "quantum_fourier_transformation_qft": 133,
+    "quantum_phase_estimation_qpe_exact": 133,
+    "quantum_phase_estimation_qpe_inexact": 133,
+    "quantum_walk_no_ancilla": 45,
+    "random_circuit": 133,
+    "w_state": 133
+  },
+  "pure_job_count": 1475,
+  "pure_job_ratio": 0.9833333333333333,
+  "runtime_estimation_method_counts": {
+    "qasm_gate_proxy_v1": 1500
+  },
+  "schema_version": 1,
+  "seed": 7104,
+  "shuffle_submit_order": true,
+  "size_bucket_counts": {
+    "large": 0,
+    "medium": 885,
+    "small": 590
+  },
+  "size_bucket_ratios": {
+    "large": 0.0,
+    "medium": 0.6,
+    "small": 0.4
+  },
+  "submission_rate_jobs_per_sec": 20.0,
+  "submit_window_sec": 75.0,
+  "total_jobs": 1500,
+  "trace_sha256": "64dbd3b365e25fa72a027770b2456603d240ea17720479fc376046e89530272e",
+  "warnings": [
+    "poisson arrivals normalized to fit submit_window_sec",
+    "mixed1500 hybrid jobs were reassigned to uniformly random arrival slots within the earliest 85% of submit positions without changing the submit-rate distribution"
+  ]
+}

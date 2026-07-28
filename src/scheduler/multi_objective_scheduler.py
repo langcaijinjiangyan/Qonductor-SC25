@@ -47,10 +47,55 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Monkey-patch Qiskit 0.45.3 BasisSearchVisitor to survive None edges in the
-# equivalence-library graph.  Without this, circuits whose gate set is already
-# a subset of the target basis can still crash inside _basis_search.
+# Qiskit 0.45.3 basis-translation compatibility patches.
 # ---------------------------------------------------------------------------
+def _patch_basis_search_private_graph() -> None:
+    """Run BasisTranslator basis searches on a private graph copy.
+
+    Qiskit's _basis_search mutates equivalence_library.graph by adding and
+    removing a dummy start node.  The default SessionEquivalenceLibrary is
+    process-global, so concurrent transpile() calls can otherwise mutate the
+    same rustworkx.PyDiGraph from multiple threads.
+    """
+    try:
+        from qiskit.transpiler.passes.basis import basis_translator
+
+        original_basis_search = basis_translator._basis_search
+        if getattr(
+            original_basis_search,
+            "_qonductor_private_graph_patch",
+            False,
+        ):
+            return
+
+        class _PrivateGraphEquivalenceLibrary:
+            def __init__(self, base):
+                self._base = base
+                self._graph = base.graph.copy()
+
+            @property
+            def graph(self):
+                return self._graph
+
+            def keys(self):
+                return self._base.keys()
+
+            def node_index(self, key):
+                return self._base.node_index(key)
+
+        def _patched_basis_search(equiv_lib, source_basis, target_basis):
+            return original_basis_search(
+                _PrivateGraphEquivalenceLibrary(equiv_lib),
+                source_basis,
+                target_basis,
+            )
+
+        _patched_basis_search._qonductor_private_graph_patch = True
+        basis_translator._basis_search = _patched_basis_search
+    except Exception:
+        pass
+
+
 def _patch_basis_search_visitor() -> None:
     try:
         from qiskit.transpiler.passes.basis.basis_translator import (
@@ -81,6 +126,7 @@ def _patch_basis_search_visitor() -> None:
         pass
 
 
+_patch_basis_search_private_graph()
 _patch_basis_search_visitor()
 
 
@@ -183,6 +229,50 @@ def calculate_exeucution_time(job, backends, estimator):
             current_execution_times.append(execution_time)
 
         return current_execution_times
+
+
+def _new_transpilation_worker(
+    transpilation_count: int,
+    transpilation_level: "TranspilationLevel",
+    pre_transpiled_circuits: dict | None = None,
+):
+    scheduler = MultiObjectiveScheduler.__new__(MultiObjectiveScheduler)
+    scheduler.transpilation_count = transpilation_count
+    scheduler.transpilation_level = transpilation_level
+    scheduler.pre_transpiled_circuits = pre_transpiled_circuits or {}
+    return scheduler
+
+
+def _transpile_job_backend_process_task(
+    job: SchedulingJob,
+    backend: Backend,
+    transpilation_count: int,
+) -> tuple[SchedulingJob | None, float]:
+    scheduler = _new_transpilation_worker(
+        transpilation_count,
+        TranspilationLevel.QPU,
+    )
+    return scheduler._transpile_job_backend(job, backend)
+
+
+def _transpile_job_process_task(
+    job: SchedulingJob,
+    backends: list[Backend],
+    processor_types: dict[str, str],
+    transpilation_count: int,
+    transpilation_level: "TranspilationLevel",
+    pre_transpiled_circuits: dict | None,
+):
+    scheduler = _new_transpilation_worker(
+        transpilation_count,
+        transpilation_level,
+        pre_transpiled_circuits,
+    )
+    return scheduler._transpile_job(job, backends, processor_types)
+
+
+def _transpilation_process_pool(processes: int):
+    return multiprocessing.get_context("spawn").Pool(processes=processes)
 
 
 class MultiObjectiveScheduler(BaseScheduler):
@@ -582,12 +672,12 @@ class MultiObjectiveScheduler(BaseScheduler):
                     [circuit] * self.transpilation_count,
                     backend=backend,
                     basis_gates=["rz", "sx", "x", "id", "cx"],
-                    optimization_level=3,
+                    optimization_level=2,
                 )
             except Exception:
                 logger.exception(
                     "Initial Qiskit transpile failed "
-                    "(backend=%s, optimization_level=3, transpilation_count=%s)\n"
+                    "(backend=%s, optimization_level=2, transpilation_count=%s)\n"
                     "%s\n%s",
                     _safe_backend_name(backend),
                     self.transpilation_count,
@@ -968,10 +1058,13 @@ class MultiObjectiveScheduler(BaseScheduler):
                     self._transpile_job_backend(*task) for task in tasks
                 ]
             else:
-                with ThreadPool(processes=worker_count) as pool:
+                with _transpilation_process_pool(worker_count) as pool:
                     values = pool.starmap(
-                        self._transpile_job_backend,
-                        tasks,
+                        _transpile_job_backend_process_task,
+                        [
+                            (job, backend, self.transpilation_count)
+                            for job, backend in tasks
+                        ],
                     )
 
             for (key, _), value in zip(miss_items, values):
@@ -1062,10 +1155,13 @@ class MultiObjectiveScheduler(BaseScheduler):
                     self._transpile_job_backend(*task) for task in tasks
                 ]
             else:
-                with ThreadPool(processes=worker_count) as pool:
+                with _transpilation_process_pool(worker_count) as pool:
                     values = pool.starmap(
-                        self._transpile_job_backend,
-                        tasks,
+                        _transpile_job_backend_process_task,
+                        [
+                            (job, backend, self.transpilation_count)
+                            for job, backend in tasks
+                        ],
                     )
 
             backend_count = len(backends)
@@ -1094,10 +1190,20 @@ class MultiObjectiveScheduler(BaseScheduler):
                 for job in jobs
             ]
         else:
-            with ThreadPool(processes=worker_count) as pool:
+            with _transpilation_process_pool(worker_count) as pool:
                 values = pool.starmap(
-                    self._transpile_job,
-                    [(job, backends, processor_types) for job in jobs],
+                    _transpile_job_process_task,
+                    [
+                        (
+                            job,
+                            backends,
+                            processor_types,
+                            self.transpilation_count,
+                            self.transpilation_level,
+                            getattr(self, "pre_transpiled_circuits", None),
+                        )
+                        for job in jobs
+                    ],
                 )
      
         for v in values:

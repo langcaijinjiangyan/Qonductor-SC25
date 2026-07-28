@@ -15,22 +15,30 @@
 #   CLEANUP_RANCHER=0    skip removing /etc/rancher (default: 1, cleans stale passwords)
 #   CLEANUP_QONDUCTOR=0     skip removing /etc/qonductor (default: 1)
 #   CLEANUP_QONDUCTOR_K8S=0 skip deleting Qonductor K8s workloads before teardown (default: 1)
-#   CLEANUP_IMAGES_TAR=0    skip removing images.tar (default: 0, preserve the image bundle)
+#   CLEANUP_REMOTE_IMAGES_TAR=0 skip removing remote /tmp/qonductor-images.tar (default: 1)
+#   CLEANUP_DEPLOY_LOGS=0   skip removing data/deploy_logs (default: 1)
+#   CLEANUP_KUBECONFIG_TMP=0 skip removing /tmp/k3s-multi-host-config.yaml (default: 1)
+#   CLEANUP_IMAGES_TAR=1    remove docker/multi-host/images.tar (default: 0, preserve input bundle)
 #   DRY_RUN=1               print commands without executing
 # ============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CLUSTER_CONFIG="${SCRIPT_DIR}/cluster-config.yaml"
 
 CLEANUP_VOLUMES="${CLEANUP_VOLUMES:-1}"
 CLEANUP_REGISTRY="${CLEANUP_REGISTRY:-1}"
-CLEANUP_IMAGES="${CLEANUP_IMAGES:-1}"
+CLEANUP_IMAGES="${CLEANUP_IMAGES:-0}"
 CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
-CLEANUP_QONDUCTOR="${CLEANUP_QONDUCTOR:-1}"
+CLEANUP_QONDUCTOR="${CLEANUP_QONDUCTOR:-0}"
 CLEANUP_QONDUCTOR_K8S="${CLEANUP_QONDUCTOR_K8S:-1}"
+CLEANUP_REMOTE_IMAGES_TAR="${CLEANUP_REMOTE_IMAGES_TAR:-0}"
+CLEANUP_DEPLOY_LOGS="${CLEANUP_DEPLOY_LOGS:-1}"
+CLEANUP_KUBECONFIG_TMP="${CLEANUP_KUBECONFIG_TMP:-1}"
 CLEANUP_IMAGES_TAR="${CLEANUP_IMAGES_TAR:-0}"
+REMOTE_IMAGES_TAR="${REMOTE_IMAGES_TAR:-/tmp/qonductor-images.tar}"
 DRY_RUN="${DRY_RUN:-0}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -66,6 +74,14 @@ _remote() {
     else
         ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$host" "$@"
     fi
+}
+
+_all_hosts() {
+    echo "${SERVER_HOST}"
+    for ((i = 0; i < AGENTS_COUNT; i++)); do
+        local host_var="AGENTS_${i}_HOST"
+        echo "${!host_var}"
+    done
 }
 
 # ---------------------------------------------------------------------------
@@ -157,6 +173,88 @@ remove_qonductor_state() {
     log "  ✓ /etc/qonductor removed on ${host}"
 }
 
+remove_remote_images_tar() {
+    local host="$1"
+
+    if [[ "$CLEANUP_REMOTE_IMAGES_TAR" != "1" ]]; then
+        return 0
+    fi
+    if [[ -z "$REMOTE_IMAGES_TAR" ]]; then
+        return 0
+    fi
+
+    if _is_local "$host"; then
+        if [[ "$REMOTE_IMAGES_TAR" == "${SCRIPT_DIR}/images.tar" ]]; then
+            return 0
+        fi
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  [dry-run] Remove local distributed image bundle ${REMOTE_IMAGES_TAR}"
+        else
+            rm -f "$REMOTE_IMAGES_TAR" 2>/dev/null || true
+        fi
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "  [dry-run] Remove ${REMOTE_IMAGES_TAR} on ${host}"
+        return 0
+    fi
+
+    _remote "$host" "rm -f '${REMOTE_IMAGES_TAR}'" 2>/dev/null || \
+        warn "  Could not remove ${REMOTE_IMAGES_TAR} on ${host}"
+}
+
+cleanup_qonductor_node_labels() {
+    if ! command -v python3 >/dev/null 2>&1; then
+        warn "python3 not found — skipping dynamic Qonductor node-label cleanup."
+        return 0
+    fi
+
+    local -a nodes
+    mapfile -t nodes < <(kubectl get nodes -o name 2>/dev/null || true)
+    [[ "${#nodes[@]}" -gt 0 ]] || return 0
+
+    for node_ref in "${nodes[@]}"; do
+        local node="${node_ref#node/}"
+        local -a labels
+        mapfile -t labels < <(
+            kubectl get node "$node" -o json 2>/dev/null | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+labels = data.get("metadata", {}).get("labels", {}) or {}
+for key in labels:
+    if (
+        key == "qonductor.io/node-type"
+        or key == "qonductor.io/memory-limit"
+        or key.startswith("qonductor.io/backend-")
+        or key.startswith("qonductor.io/qpu-")
+    ):
+        print(f"{key}-")
+'
+        )
+        if [[ "${#labels[@]}" -gt 0 ]]; then
+            if [[ "$DRY_RUN" == "1" ]]; then
+                echo "  [dry-run] kubectl label node ${node} ${labels[*]} --overwrite"
+            else
+                kubectl label node "$node" "${labels[@]}" --overwrite 2>/dev/null || true
+            fi
+        fi
+
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  [dry-run] Remove quantum.ibm.com/qpu capacity from ${node}"
+        else
+            kubectl patch node "$node" --subresource=status --type=json \
+                -p='[{"op":"remove","path":"/status/capacity/quantum.ibm.com~1qpu"}]' \
+                2>/dev/null || true
+            kubectl patch node "$node" --subresource=status --type=json \
+                -p='[{"op":"remove","path":"/status/allocatable/quantum.ibm.com~1qpu"}]' \
+                2>/dev/null || true
+        fi
+    done
+}
+
 cleanup_qonductor_k8s_resources() {
     if [[ "$CLEANUP_QONDUCTOR_K8S" != "1" ]]; then
         warn "CLEANUP_QONDUCTOR_K8S=0 — skipping Qonductor K8s workload cleanup."
@@ -174,20 +272,41 @@ cleanup_qonductor_k8s_resources() {
     log "Deleting Qonductor K8s workloads before container teardown …"
     if [[ "$DRY_RUN" == "1" ]]; then
         echo "  [dry-run] kubectl delete deployment/qonductor-operator daemonset/qonductor-qpu-device-plugin -n default --ignore-not-found=true --wait=true"
-        echo "  [dry-run] kubectl delete configmap/qonductor-config -n default --ignore-not-found=true"
-        echo "  [dry-run] kubectl delete configmap -n default -l app=qonductor,component=qpu-profile --ignore-not-found=true"
+        echo "  [dry-run] kubectl delete hybridworkflows.qonductor.io quantumjobs.qonductor.io --all -n default --ignore-not-found=true --wait=false"
+        echo "  [dry-run] kubectl delete jobs -n default -l app=qonductor --ignore-not-found=true --wait=false"
+        echo "  [dry-run] kubectl delete pods -n default -l app=qonductor-classical --ignore-not-found=true --wait=false"
+        echo "  [dry-run] kubectl delete pods -n default -l app=qonductor-quantum --ignore-not-found=true --wait=false"
+        echo "  [dry-run] kubectl delete configmap -n default -l app=qonductor --ignore-not-found=true"
+        echo "  [dry-run] kubectl delete serviceaccount/qonductor-operator service/qonductor-metrics -n default --ignore-not-found=true"
+        echo "  [dry-run] kubectl delete clusterrole/qonductor-operator clusterrolebinding/qonductor-operator --ignore-not-found=true"
+        echo "  [dry-run] kubectl delete crd hybridworkflows.qonductor.io quantumjobs.qonductor.io --ignore-not-found=true"
+        cleanup_qonductor_node_labels
         return 0
     fi
 
     kubectl delete deployment/qonductor-operator \
         daemonset/qonductor-qpu-device-plugin \
         -n default --ignore-not-found=true --wait=true 2>/dev/null || true
-    kubectl delete configmap/qonductor-config \
-        -n default --ignore-not-found=true 2>/dev/null || true
+    kubectl delete hybridworkflows.qonductor.io quantumjobs.qonductor.io \
+        --all -n default --ignore-not-found=true --wait=false 2>/dev/null || true
+    kubectl delete jobs \
+        -l app=qonductor -n default --ignore-not-found=true --wait=false 2>/dev/null || true
+    kubectl delete pods \
+        -l app=qonductor-classical -n default --ignore-not-found=true --wait=false 2>/dev/null || true
+    kubectl delete pods \
+        -l app=qonductor-quantum -n default --ignore-not-found=true --wait=false 2>/dev/null || true
     kubectl delete configmap -n default \
-        -l app=qonductor,component=qpu-profile \
+        -l app=qonductor \
         --ignore-not-found=true 2>/dev/null || true
-    log "  ✓ Qonductor operator/device-plugin resources deleted"
+    kubectl delete serviceaccount/qonductor-operator service/qonductor-metrics \
+        -n default --ignore-not-found=true 2>/dev/null || true
+    kubectl delete clusterrole/qonductor-operator \
+        clusterrolebinding/qonductor-operator \
+        --ignore-not-found=true 2>/dev/null || true
+    cleanup_qonductor_node_labels
+    kubectl delete crd hybridworkflows.qonductor.io quantumjobs.qonductor.io \
+        --ignore-not-found=true 2>/dev/null || true
+    log "  ✓ Qonductor K8s resources deleted"
 }
 
 # ---------------------------------------------------------------------------
@@ -303,6 +422,8 @@ main() {
     local server_host="${SERVER_HOST}"
     local server_container="${SERVER_CONTAINERNAME}"
     local cluster_name="${CLUSTER_NAME}"
+    local -a all_hosts
+    mapfile -t all_hosts < <(_all_hosts | sort -u)
 
     # Delete the operator and device-plugin DaemonSet first so node-local
     # per-QPU queue controller child processes can exit cleanly.
@@ -334,40 +455,28 @@ main() {
     # password rejected" errors on the next deploy.
     if [[ "$CLEANUP_RANCHER" == "1" ]]; then
         log "Cleaning up k3s host state (/etc/rancher) on all nodes …"
-        local -A _seen_rancher
-        _seen_rancher["$server_host"]=1
-        for ((i = 0; i < AGENTS_COUNT; i++)); do
-            local host_var="AGENTS_${i}_HOST"
-            _seen_rancher["${!host_var}"]=1
-        done
-        for host in "${!_seen_rancher[@]}"; do
+        for host in "${all_hosts[@]}"; do
             remove_rancher_state "$host"
         done
     fi
 
     if [[ "$CLEANUP_QONDUCTOR" == "1" ]]; then
         log "Cleaning up Qonductor host state (/etc/qonductor) on all nodes …"
-        local -A _seen_qonc
-        _seen_qonc["$server_host"]=1
-        for ((i = 0; i < AGENTS_COUNT; i++)); do
-            local host_var="AGENTS_${i}_HOST"
-            _seen_qonc["${!host_var}"]=1
-        done
-        for host in "${!_seen_qonc[@]}"; do
+        for host in "${all_hosts[@]}"; do
             remove_qonductor_state "$host"
+        done
+    fi
+
+    if [[ "$CLEANUP_REMOTE_IMAGES_TAR" == "1" ]]; then
+        log "Cleaning up distributed image bundle copies …"
+        for host in "${all_hosts[@]}"; do
+            remove_remote_images_tar "$host"
         done
     fi
 
     # ---- Optional: clean up Docker images -----------------------------------
     if [[ "$CLEANUP_IMAGES" == "1" ]]; then
-        # Collect unique hosts (server + agents).
-        local -A seen_hosts
-        seen_hosts["$server_host"]=1
-        for ((i = 0; i < AGENTS_COUNT; i++)); do
-            local host_var="AGENTS_${i}_HOST"
-            seen_hosts["${!host_var}"]=1
-        done
-        for host in "${!seen_hosts[@]}"; do
+        for host in "${all_hosts[@]}"; do
             remove_images_on_host "$host"
         done
         # Also clean up local images.
@@ -420,8 +529,10 @@ main() {
 
     # ---- Clean generated local files ---------------------------------------
     local images_tar="${SCRIPT_DIR}/images.tar"
-    local image_list="${PROJECT_ROOT:-${SCRIPT_DIR}/../..}/image-list.txt"
-    local workflow_registry="${PROJECT_ROOT:-${SCRIPT_DIR}/../..}/data/workflow_registry"
+    local image_list="${PROJECT_ROOT}/image-list.txt"
+    local workflow_registry="${PROJECT_ROOT}/data/workflow_registry"
+    local deploy_logs="${PROJECT_ROOT}/data/deploy_logs"
+    local tmp_kubeconfig="/tmp/k3s-multi-host-config.yaml"
 
     if [[ -f "$images_tar" ]]; then
         if [[ "$CLEANUP_IMAGES_TAR" == "1" ]]; then
@@ -454,6 +565,24 @@ main() {
         fi
     fi
 
+    if [[ "$CLEANUP_DEPLOY_LOGS" == "1" && -d "$deploy_logs" ]]; then
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  [dry-run] Remove ${deploy_logs}"
+        else
+            rm -rf "$deploy_logs"
+            log "  ✓ ${deploy_logs} removed"
+        fi
+    fi
+
+    if [[ "$CLEANUP_KUBECONFIG_TMP" == "1" && -f "$tmp_kubeconfig" ]]; then
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  [dry-run] Remove ${tmp_kubeconfig}"
+        else
+            rm -f "$tmp_kubeconfig"
+            log "  ✓ ${tmp_kubeconfig} removed"
+        fi
+    fi
+
     echo ""
     log "Cluster '${cluster_name}' torn down."
     if [[ "$CLEANUP_VOLUMES" == "0" ]]; then
@@ -471,6 +600,15 @@ main() {
     fi
     if [[ "$CLEANUP_QONDUCTOR_K8S" != "1" ]]; then
         warn "Qonductor K8s workloads were not explicitly deleted before teardown."
+    fi
+    if [[ "$CLEANUP_REMOTE_IMAGES_TAR" != "1" ]]; then
+        warn "Distributed image bundle copies were preserved. Set CLEANUP_REMOTE_IMAGES_TAR=1 to remove them."
+    fi
+    if [[ "$CLEANUP_DEPLOY_LOGS" != "1" ]]; then
+        warn "Deploy logs were preserved. Set CLEANUP_DEPLOY_LOGS=1 to remove them."
+    fi
+    if [[ "$CLEANUP_KUBECONFIG_TMP" != "1" ]]; then
+        warn "Temporary kubeconfig was preserved. Set CLEANUP_KUBECONFIG_TMP=1 to remove it."
     fi
     if [[ "$CLEANUP_IMAGES_TAR" != "1" ]]; then
         warn "images.tar was preserved. Set CLEANUP_IMAGES_TAR=1 to remove it."

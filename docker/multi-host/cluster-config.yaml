@@ -77,10 +77,10 @@ agents:
   #     - qpu_f985_27q.json
 
 
-  # - host: 192.168.36.132            # physical host IP (SSH target)
-  #   containerName: k3s-agent-4      # Docker container name
-  #   nodeName: classical-worker-1    # Kubernetes node name
-  #   nodeType: classical             # Qonductor node role label
-  #   memory: 3g                      # RAM to allocate
-  #   cpus: 2                         # CPU cores to allocate
-  #   qpus: []
+  - host: 192.168.36.132            # physical host IP (SSH target)
+    containerName: k3s-agent-2      # Docker container name
+    nodeName: classical-worker-1    # Kubernetes node name
+    nodeType: classical             # Qonductor node role label
+    memory: 3g                      # RAM to allocate
+    cpus: 2                         # CPU cores to allocate
+    qpus: []

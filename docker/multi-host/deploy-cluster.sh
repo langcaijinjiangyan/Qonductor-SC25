@@ -12,35 +12,27 @@
 #
 # Flow:
 #   Phase 0: Pre-flight   — deps, config, firewall hints
-#   Phase 1: Teardown      — destroy existing containers/volumes/images
-#   Phase 2: Image Prepare — load from images.tar or build from Dockerfiles
-#   Phase 3: Distribute    — push images to Docker on every host
-#   Phase 4: Deploy k3s    — server → agents in parallel → wait for nodes
-#   Phase 5: Containerd    — import images into k3s embedded containerd
-#   Phase 6: Configure     — QPU profiles, labels, CRDs, controllers
-#   Phase 7: Summary       — print cluster info
+#   Phase 1: Image Prepare — load from images.tar into local Docker
+#   Phase 2: Distribute    — copy images.tar to every remote host and docker load
+#   Phase 3: Deploy k3s    — server → agents in parallel → wait for nodes
+#   Phase 4: Containerd    — import images into k3s embedded containerd
+#   Phase 5: Configure     — QPU profiles, labels, CRDs, controllers
+#   Phase 6: Summary       — print cluster info
 #
 # Usage:
 #   bash docker/multi-host/deploy-cluster.sh              # full deploy
-#   SKIP_TEARDOWN=1  bash docker/multi-host/deploy-cluster.sh   # keep existing
-#   # preserve volumes (skip volume cleanup, may cause node password issues):
-#   CLEANUP_VOLUMES=0 bash docker/multi-host/deploy-cluster.sh
-#   CLEANUP_RANCHER=0 bash docker/multi-host/deploy-cluster.sh   # keep /etc/rancher
+#   bash docker/multi-host/teardown-cluster.sh            # explicit cleanup
 #   DRY_RUN=1        bash docker/multi-host/deploy-cluster.sh   # print only
 #
-# Image sources (checked in order):
-#   1. ${IMAGES_TAR} file exists → load from tar (no build needed)
-#   2. Otherwise → docker build + docker pull, optional SAVE_IMAGES_TAR=1
+# Image source:
+#   ${IMAGES_TAR} must exist.  Build or refresh it with offline-pack.sh before
+#   running this deploy script.
 #
 # Environment variables:
-#   IMAGES_TAR              path to images.tar (default: ${PROJECT_ROOT}/images.tar)
-#   SKIP_TEARDOWN           skip teardown phase
-#   CLEANUP_VOLUMES         remove Docker volumes during teardown (default: 1)
-#   SKIP_IMAGE_BUILD        skip Docker image builds / tar load (images pre-loaded)
+#   IMAGES_TAR              path to images.tar (default: docker/multi-host/images.tar)
 #   SKIP_IMAGE_DISTRIBUTE   skip image distribution to remote hosts
 #   SKIP_CONTAINERD_IMPORT  skip importing into k3s embedded containerd
 #   SKIP_CONTROLLERS        skip operator/device-plugin deployment
-#   SAVE_IMAGES_TAR         save all images to images.tar after building
 #   SKIP_FIREWALL           skip firewall port hints
 #   DRY_RUN                 print commands without executing
 #   OPERATOR_CPU_REQUEST    operator CPU request (default: 1)
@@ -59,6 +51,7 @@
 #   QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE enable per-QPU queue controllers in device-plugin (default: 1)
 #   QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE enable legacy central queue controller in operator (default: 0)
 #   QONDUCTOR_QPU_QUEUE_RECONCILE_INTERVAL node-local queue fallback reconcile interval seconds (default: 30)
+#   REMOTE_IMAGES_TAR       path used for images.tar on remote hosts (default: /tmp/qonductor-images.tar)
 # ============================================================================
 
 set -euo pipefail
@@ -71,16 +64,12 @@ DEPLOY_DIR="${PROJECT_ROOT}/deploy"
 
 # ---- Flags -------------------------------------------------------------------
 SKIP_FIREWALL="${SKIP_FIREWALL:-1}"
-SKIP_TEARDOWN="${SKIP_TEARDOWN:-0}"
-CLEANUP_VOLUMES="${CLEANUP_VOLUMES:-1}"
-CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
-SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
-SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-0}"
+SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-1s}"
 SKIP_CONTAINERD_IMPORT="${SKIP_CONTAINERD_IMPORT:-0}"
 SKIP_CONTROLLERS="${SKIP_CONTROLLERS:-0}"
-SAVE_IMAGES_TAR="${SAVE_IMAGES_TAR:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 IMAGES_TAR="${IMAGES_TAR:-${SCRIPT_DIR}/images.tar}"
+REMOTE_IMAGES_TAR="${REMOTE_IMAGES_TAR:-/tmp/qonductor-images.tar}"
 IMAGE_LIST_FILE="${PROJECT_ROOT}/image-list.txt"
 OPERATOR_CPU_REQUEST="${OPERATOR_CPU_REQUEST:-3}"
 OPERATOR_MEMORY_REQUEST="${OPERATOR_MEMORY_REQUEST:-2Gi}"
@@ -342,6 +331,41 @@ _load_image_list() {
     [[ "${#_out[@]}" -gt 0 ]] || die "No images resolved from ${IMAGE_LIST_FILE} or built-in image list."
 }
 
+_write_image_list_from_tar() {
+    local tar_path="$1"
+    local tmp_file="${IMAGE_LIST_FILE}.tmp"
+
+    tar -xf "$tar_path" -O manifest.json 2>/dev/null | python3 -c '
+import json
+import sys
+
+try:
+    manifest = json.load(sys.stdin)
+except json.JSONDecodeError:
+    raise SystemExit(1)
+
+seen = set()
+for record in manifest:
+    for tag in record.get("RepoTags") or []:
+        if tag.startswith("docker.io/"):
+            tag = tag[len("docker.io/"):]
+        if tag and tag not in seen:
+            seen.add(tag)
+            print(tag)
+' > "$tmp_file" || {
+        rm -f "$tmp_file"
+        die "Failed to read image list from ${tar_path}"
+    }
+
+    [[ -s "$tmp_file" ]] || {
+        rm -f "$tmp_file"
+        die "No RepoTags found in ${tar_path}"
+    }
+
+    mv "$tmp_file" "$IMAGE_LIST_FILE"
+    log "  ✓ ${IMAGE_LIST_FILE} updated from ${tar_path}"
+}
+
 _require_docker_images() {
     local host="$1"; shift
     local missing=()
@@ -460,6 +484,37 @@ check_remote_docker() {
     log "  ${host}: ${version}"
 }
 
+check_remote_dockers() {
+    log "Checking Docker on remote hosts in parallel …"
+
+    local -a hosts
+    mapfile -t hosts < <(_all_hosts | sort -u)
+
+    local -a check_pids=()
+    local -a check_labels=()
+    local failures=0
+    local host pid
+
+    for host in "${hosts[@]}"; do
+        (
+            check_remote_docker "$host"
+        ) &
+        check_pids+=("$!")
+        check_labels+=("$host")
+    done
+
+    for i in "${!check_pids[@]}"; do
+        pid="${check_pids[$i]}"
+        host="${check_labels[$i]}"
+        if ! wait "$pid"; then
+            warn "  Docker preflight failed on ${host}"
+            failures=$((failures + 1))
+        fi
+    done
+
+    [[ "$failures" -eq 0 ]] || die "${failures} Docker preflight check(s) failed"
+}
+
 detect_iface() {
     local host="$1"
 
@@ -476,174 +531,41 @@ detect_iface() {
 }
 
 # ==============================================================================
-# Phase 1: Teardown existing cluster
+# Phase 1: Prepare images from tar
 # ==============================================================================
-
-teardown_existing() {
-    if [[ "$SKIP_TEARDOWN" == "1" ]]; then
-        warn "SKIP_TEARDOWN=1 — skipping teardown."
-        return 0
-    fi
-
-    _banner "Phase 1: Teardown existing cluster"
-
-    local -A seen_hosts
-    seen_hosts["${SERVER_HOST}"]="${SERVER_CONTAINERNAME}"
-    for ((i = 0; i < AGENTS_COUNT; i++)); do
-        local host_var="AGENTS_${i}_HOST"
-        local name_var="AGENTS_${i}_CONTAINERNAME"
-        seen_hosts["${!host_var}"]="${!name_var}"
-    done
-
-    for host in "${!seen_hosts[@]}"; do
-        local container="${seen_hosts[$host]}"
-
-        # Stop and remove k3s container.
-        if _remote "$host" "docker ps -a --format '{{.Names}}' | grep -qx '${container}'" 2>/dev/null; then
-            log "Stopping ${container} on ${host} …"
-            _run "$host" "docker stop '${container}' 2>/dev/null || true"
-            _run "$host" "docker rm -f '${container}' 2>/dev/null || true"
-            log "  ✓ ${container} removed"
-        else
-            log "  ${container} on ${host}: not present"
-        fi
-
-        # Optionally remove data volume.
-        if [[ "$CLEANUP_VOLUMES" == "1" ]]; then
-            if _remote "$host" "docker volume ls --format '{{.Name}}' | grep -qx '${container}-data'" 2>/dev/null; then
-                warn "Removing volume ${container}-data on ${host} …"
-                _run "$host" "docker volume rm '${container}-data'" || warn "  Could not remove volume"
-            fi
-        fi
-
-        # Remove stale k3s host-level state.
-        # k3s bind-mounts /etc/rancher from the host filesystem — the node
-        # password stored there survives container removal and causes
-        # "Node password rejected" errors on redeploy.
-        if [[ "${CLEANUP_RANCHER:-1}" == "1" ]] && _remote "$host" "test -d /etc/rancher" 2>/dev/null; then
-            warn "Removing /etc/rancher on ${host} (stale node passwords) …"
-            _run "$host" "sudo rm -rf /etc/rancher" || warn "  Could not remove /etc/rancher"
-        fi
-
-        # Remove old Qonductor images (so we start clean).
-        for img in "${_QONDUCTOR_IMAGES[@]}"; do
-            if _remote "$host" "docker image inspect '${img}' >/dev/null 2>&1"; then
-                _run "$host" "docker rmi '${img}' 2>/dev/null || true"
-            fi
-        done
-    done
-
-    log "  ✓ Teardown complete"
-}
-
-# ==============================================================================
-# Phase 2: Prepare images (from tar or build)
-# ==============================================================================
-
-_build_qonductor_images() {
-    log "Building Qonductor Docker images …"
-    mkdir -p "${PROJECT_ROOT}/data/workflow_registry"
-
-    docker build -f "${PROJECT_ROOT}/docker/Dockerfile.operator" \
-        -t qonductor-operator:latest "${PROJECT_ROOT}"
-
-    docker build -f "${PROJECT_ROOT}/docker/Dockerfile.device-plugin" \
-        -t qonductor-device-plugin:latest "${PROJECT_ROOT}"
-
-    docker build -f "${PROJECT_ROOT}/docker/Dockerfile.quantum-executor" \
-        -t qonductor-quantum-executor:latest "${PROJECT_ROOT}"
-
-    log "  ✓ Qonductor images built"
-}
-
-_pull_k3s_images() {
-    local k3s_image="$(_get_k3s_image)"
-
-    if docker image inspect "$k3s_image" >/dev/null 2>&1; then
-        log "  k3s image ${k3s_image} already present"
-    else
-        log "  Pulling ${k3s_image} …"
-        docker pull "$k3s_image" || warn "Failed to pull ${k3s_image} from registry"
-    fi
-
-    for img in "${_K3S_INFRA_IMAGES[@]}"; do
-        if docker image inspect "$img" >/dev/null 2>&1; then
-            log "  [skip] $img (already present)"
-        else
-            log "  Pulling $img …"
-            docker pull "$img" || warn "Failed to pull ${img}"
-        fi
-    done
-    log "  ✓ k3s images ready"
-}
-
-_save_all_to_tar() {
-    local tar_path="$1"
-    local images=()
-    mapfile -t images < <(_get_all_images)
-
-    log "Saving ${#images[@]} images → ${tar_path} …"
-    docker save "${images[@]}" -o "$tar_path"
-    local size; size=$(du -h "$tar_path" | cut -f1)
-    log "  ✓ ${tar_path} (${size})"
-
-    # Also write image-list.txt for future reference.
-    _get_all_images > "$IMAGE_LIST_FILE"
-    log "  ✓ ${IMAGE_LIST_FILE} updated"
-}
 
 prepare_images() {
-    _banner "Phase 2: Prepare images"
+    _banner "Phase 1: Prepare images"
 
-    if [[ "$SKIP_IMAGE_BUILD" == "1" ]]; then
-        local -a images
-        _load_image_list images
-        warn "SKIP_IMAGE_BUILD=1 — skipping local build/load."
-        if [[ "$SKIP_IMAGE_DISTRIBUTE" != "1" ]]; then
-            log "Verifying local Docker has images needed for distribution …"
-            _require_docker_images "localhost" "${images[@]}" || \
-                die "SKIP_IMAGE_BUILD=1 requires all images in local Docker unless SKIP_IMAGE_DISTRIBUTE=1."
-        fi
+    [[ -f "$IMAGES_TAR" ]] || \
+        die "images.tar not found at ${IMAGES_TAR}. Build it first with docker/multi-host/offline-pack.sh."
+
+    local tar_size; tar_size=$(du -h "$IMAGES_TAR" | cut -f1)
+    log "Found ${IMAGES_TAR} (${tar_size}) — loading into local Docker …"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "  [dry-run] docker load -i ${IMAGES_TAR}"
         return 0
     fi
-
-    # ---- Path A: images.tar exists, load from it -------------------------------
-    if [[ -f "$IMAGES_TAR" ]]; then
-        local tar_size; tar_size=$(du -h "$IMAGES_TAR" | cut -f1)
-        log "Found ${IMAGES_TAR} (${tar_size}) — loading into local Docker …"
-        docker load -i "$IMAGES_TAR"
-        log "  ✓ Images loaded from ${IMAGES_TAR}"
-        return 0
-    fi
-
-    # ---- Path B: Build + pull from source -------------------------------------
-    log "No ${IMAGES_TAR} found — building from source …"
-    echo ""
-
-    _build_qonductor_images
-    _pull_k3s_images
-
-    if [[ "$SAVE_IMAGES_TAR" == "1" ]]; then
-        _save_all_to_tar "$IMAGES_TAR"
-    else
-        # Always keep image-list.txt up to date.
-        _get_all_images > "$IMAGE_LIST_FILE"
-        log "  ✓ ${IMAGE_LIST_FILE} updated"
-    fi
+    docker load -i "$IMAGES_TAR"
+    log "  ✓ Images loaded from ${IMAGES_TAR}"
+    _write_image_list_from_tar "$IMAGES_TAR"
 }
 
 # ==============================================================================
-# Phase 3: Distribute images to every host's Docker
+# Phase 2: Distribute images.tar to every host's Docker
 # ==============================================================================
 
 distribute_images() {
-    _banner "Phase 3: Distribute images to all hosts"
+    _banner "Phase 2: Distribute images.tar to all hosts"
 
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
 
     local -a images
     _load_image_list images
+
+    [[ -f "$IMAGES_TAR" ]] || \
+        die "images.tar not found at ${IMAGES_TAR}. Cannot distribute images."
 
     local dist_log_dir="${PROJECT_ROOT}/data/deploy_logs/image_distribute"
     mkdir -p "$dist_log_dir"
@@ -653,6 +575,12 @@ distribute_images() {
         for host in "${hosts[@]}"; do
             _require_docker_images "$host" "${images[@]}" || \
                 die "SKIP_IMAGE_DISTRIBUTE=1 requires all images to be present on ${host}."
+            if [[ "$SKIP_CONTAINERD_IMPORT" != "1" ]]; then
+                local tar_path="$REMOTE_IMAGES_TAR"
+                _is_local "$host" && tar_path="$IMAGES_TAR"
+                _remote "$host" "test -f '${tar_path}'" || \
+                    die "SKIP_IMAGE_DISTRIBUTE=1 requires ${tar_path} on ${host} when containerd import is enabled."
+            fi
         done
         return 0
     fi
@@ -662,25 +590,36 @@ distribute_images() {
     local failures=0
 
     for host in "${hosts[@]}"; do
+        local host_log="${dist_log_dir}/${host}.log"
+        : >"$host_log"
+
         if _is_local "$host"; then
-            log "Verifying localhost ${host} already has required images …"
+            log "Verifying localhost ${host} already has images from ${IMAGES_TAR} …"
             _require_docker_images "$host" "${images[@]}" || \
                 die "Local host ${host} is part of the cluster but is missing required images."
             continue
         fi
 
-        log "Queueing distribution of ${#images[@]} images to ${host} …"
+        log "Queueing ${IMAGES_TAR} transfer and docker load on ${host} …"
 
-        # Stream images tar over SSH to avoid temp files on remote.
-        local host_log="${dist_log_dir}/${host}.log"
-        : >"$host_log"
-        (
-            echo "[INFO] $(date -Iseconds) sending ${#images[@]} image(s) to ${host}"
-            docker save "${images[@]}" 2>>"$host_log" | \
-                ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "$host" "docker load" 2>&1
-        ) >>"$host_log" 2>&1 &
-        dist_pids+=("$!")
-        dist_labels+=("$host")
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "  [dry-run] scp ${IMAGES_TAR} ${host}:${REMOTE_IMAGES_TAR}"
+            echo "  [dry-run] ssh ${host} docker load -i ${REMOTE_IMAGES_TAR}"
+        else
+            (
+                echo "[INFO] $(date -Iseconds) copying ${IMAGES_TAR} to ${host}:${REMOTE_IMAGES_TAR}"
+                scp -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+                    "$IMAGES_TAR" "${host}:${REMOTE_IMAGES_TAR}"
+                echo "[INFO] $(date -Iseconds) loading ${REMOTE_IMAGES_TAR} into Docker on ${host}"
+                ssh -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+                    -o StrictHostKeyChecking=accept-new \
+                    "$host" "docker load -i '${REMOTE_IMAGES_TAR}'"
+                echo "[INFO] $(date -Iseconds) verifying ${#images[@]} image(s) on ${host}"
+                _require_docker_images "$host" "${images[@]}"
+            ) >>"$host_log" 2>&1 &
+            dist_pids+=("$!")
+            dist_labels+=("$host")
+        fi
     done
 
     for i in "${!dist_pids[@]}"; do
@@ -700,7 +639,7 @@ distribute_images() {
 }
 
 # ==============================================================================
-# Phase 4: Deploy k3s server + agents
+# Phase 3: Deploy k3s server + agents
 # ==============================================================================
 
 deploy_server() {
@@ -1003,11 +942,11 @@ wait_for_nodes() {
 }
 
 # ==============================================================================
-# Phase 5: Import images into k3s embedded containerd
+# Phase 4: Import images into k3s embedded containerd
 # ==============================================================================
 
 import_containerd() {
-    _banner "Phase 5: Import images into k3s containerd"
+    _banner "Phase 4: Import images into k3s containerd"
 
     if [[ "$SKIP_CONTAINERD_IMPORT" == "1" ]]; then
         warn "SKIP_CONTAINERD_IMPORT=1 — skipping containerd import."
@@ -1040,37 +979,38 @@ import_containerd() {
             continue
         fi
 
-        log "Queueing import of ${#images[@]} images into ${container} on ${host} …"
-        _require_docker_images "$host" "${images[@]}" || \
-            die "Cannot import into ${container}: required image(s) missing from Docker on ${host}."
+        log "Queueing import of ${#images[@]} images into ${container} on ${host} from images.tar …"
 
         local host_log="${import_log_dir}/${host}_${container}.log"
         # Truncate log for a fresh run.
         if _is_local "$host"; then
             : >"$host_log" 2>/dev/null || true
         else
-            _remote "$host" "mkdir -p '$(dirname "$host_log")'" 2>/dev/null || true
             : >"$host_log" 2>/dev/null || true
         fi
 
         if [[ "$DRY_RUN" == "1" ]]; then
-            echo "  [dry-run] ${host}: import ${#images[@]} images one-by-one into ${container}"
+            local tar_path="$REMOTE_IMAGES_TAR"
+            _is_local "$host" && tar_path="$IMAGES_TAR"
+            echo "  [dry-run] ${host}: ctr import ${tar_path} into ${container}"
         else
             (
-                local import_ok=0
-                local import_fail=0
-                for img in "${images[@]}"; do
-                    # Import each image individually so a failure on one does not
-                    # break the rest.  Capture stderr into the per-host log.
-                    if _remote "$host" \
-                        "docker save '${img}' 2>&1 | docker exec -i '${container}' ctr -n k8s.io images import - 2>&1" \
-                        >>"$host_log" 2>&1; then
-                        import_ok=$((import_ok + 1))
-                    else
-                        import_fail=$((import_fail + 1))
-                        echo "[FAIL] $(date -Iseconds) ${host}:${container} — ${img}" >>"$host_log"
-                    fi
-                done
+                local tar_path="$REMOTE_IMAGES_TAR"
+                _is_local "$host" && tar_path="$IMAGES_TAR"
+
+                if ! _remote "$host" "test -f '${tar_path}'" 2>>"$host_log"; then
+                    echo "[FAIL] $(date -Iseconds) ${host}:${container} — missing ${tar_path}" >>"$host_log"
+                    exit 1
+                fi
+
+                echo "[INFO] $(date -Iseconds) importing ${tar_path} into ${container}" >>"$host_log"
+                if _is_local "$host"; then
+                    docker exec -i "${container}" ctr -n k8s.io images import - < "$tar_path" >>"$host_log" 2>&1
+                else
+                    _remote "$host" \
+                        "docker exec -i '${container}' ctr -n k8s.io images import - < '${tar_path}'" \
+                        >>"$host_log" 2>&1
+                fi
 
                 # containerd metadata can become visible shortly after import
                 # returns. Retry verification to avoid a transient false failure.
@@ -1100,11 +1040,11 @@ import_containerd() {
                     done
                 fi
 
-                if [[ "$import_fail" -gt 0 || "$verify_missing" -gt 0 ]]; then
-                    echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — ok=${import_ok} fail=${import_fail} missing=${verify_missing}" >>"$host_log"
+                if [[ "$verify_missing" -gt 0 ]]; then
+                    echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — tar_import=ok missing=${verify_missing}" >>"$host_log"
                     exit 1
                 fi
-                echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — all ${import_ok} images imported and verified" >>"$host_log"
+                echo "[SUMMARY] $(date -Iseconds) ${host}:${container} — images.tar imported and all ${#images[@]} images verified" >>"$host_log"
                 exit 0
             ) &
             import_pids+=("$!")
@@ -1129,7 +1069,7 @@ import_containerd() {
 }
 
 # ==============================================================================
-# Phase 6: Configure cluster
+# Phase 5: Configure cluster
 # ==============================================================================
 
 sync_qpu_profiles() {
@@ -1137,8 +1077,17 @@ sync_qpu_profiles() {
 
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
+
+    local tmp_root
+    tmp_root="$(mktemp -d /tmp/qonductor-qpu-profiles.XXXXXX)"
+    local -A host_dirs=()
+    local -A profile_counts=()
+    local host
     for host in "${hosts[@]}"; do
-        _run "$host" "sudo mkdir -p /etc/qonductor/qpus && sudo find /etc/qonductor/qpus -maxdepth 1 -type f -name '*.json' -delete"
+        local host_slug="${host//[^A-Za-z0-9_.-]/_}"
+        host_dirs["$host"]="${tmp_root}/${host_slug}"
+        profile_counts["$host"]=0
+        mkdir -p "${host_dirs[$host]}"
     done
 
     for ((i = 0; i < AGENTS_COUNT; i++)); do
@@ -1161,21 +1110,50 @@ sync_qpu_profiles() {
                 local qpu_file="${qpus[$j]}"
                 local qpu_name
                 qpu_name="$(_qpu_instance_name "$node_name" "$j" "$qpu_file")"
-                local rendered_profile
-                rendered_profile="$(mktemp "/tmp/qonductor-qpu-${qpu_name}.XXXXXX.json")"
+                local rendered_profile="${host_dirs[$host]}/${qpu_name}.json"
                 _render_qpu_instance_profile "$node_name" "$j" "$qpu_file" "$rendered_profile"
-
-                if _is_local "$host"; then
-                    sudo cp "$rendered_profile" "/etc/qonductor/qpus/${qpu_name}.json"
-                else
-                    scp -q "$rendered_profile" "${host}:/tmp/${qpu_name}.json"
-                    _remote "$host" "sudo mv /tmp/${qpu_name}.json /etc/qonductor/qpus/${qpu_name}.json"
-                fi
-                rm -f "$rendered_profile"
-                log "  ✓ ${qpu_file} as ${qpu_name}.json → ${host}:/etc/qonductor/qpus/"
+                profile_counts["$host"]=$((profile_counts["$host"] + 1))
+                log "  staged ${qpu_file} as ${qpu_name}.json for ${host}"
             done
         fi
     done
+
+    local -a sync_pids=()
+    local -a sync_labels=()
+    local failures=0
+    for host in "${hosts[@]}"; do
+        (
+            local host_dir="${host_dirs[$host]}"
+            local count="${profile_counts[$host]}"
+            _run "$host" "sudo mkdir -p /etc/qonductor/qpus && sudo find /etc/qonductor/qpus -maxdepth 1 -type f -name '*.json' -delete"
+            if [[ "$count" -gt 0 ]]; then
+                if [[ "$DRY_RUN" == "1" ]]; then
+                    echo "  [dry-run] tar/copy ${count} QPU profile(s) to ${host}:/etc/qonductor/qpus/"
+                elif _is_local "$host"; then
+                    sudo cp "${host_dir}"/*.json /etc/qonductor/qpus/
+                else
+                    local bundle="/tmp/qonductor-qpu-profiles-${host//[^A-Za-z0-9_.-]/_}.tar.gz"
+                    local remote_bundle="/tmp/qonductor-qpu-profiles.tar.gz"
+                    tar -C "$host_dir" -czf "$bundle" .
+                    scp -q "$bundle" "${host}:${remote_bundle}"
+                    rm -f "$bundle"
+                    _remote "$host" "sudo tar -xzf '${remote_bundle}' -C /etc/qonductor/qpus && rm -f '${remote_bundle}'"
+                fi
+            fi
+            log "  ✓ ${count} QPU profile(s) → ${host}:/etc/qonductor/qpus/"
+        ) &
+        sync_pids+=("$!")
+        sync_labels+=("$host")
+    done
+
+    for i in "${!sync_pids[@]}"; do
+        if ! wait "${sync_pids[$i]}"; then
+            warn "  QPU profile sync failed on ${sync_labels[$i]}"
+            failures=$((failures + 1))
+        fi
+    done
+    rm -rf "$tmp_root"
+    [[ "$failures" -eq 0 ]] || die "${failures} QPU profile sync task(s) failed"
 }
 
 sync_offline_results() {
@@ -1184,21 +1162,50 @@ sync_offline_results() {
     log "Syncing offline quantum results database to cluster hosts …"
     local -a hosts
     mapfile -t hosts < <(_all_hosts | sort -u)
+    local source_sha
+    source_sha="$(sha256sum "$OFFLINE_RESULTS_DB_SOURCE" | awk '{print $1}')"
+
+    local -a db_pids=()
+    local -a db_labels=()
+    local failures=0
+    local host
     for host in "${hosts[@]}"; do
-        local destination="${OFFLINE_RESULTS_HOST_DIR}/${OFFLINE_RESULTS_DB_NAME}"
-        _run "$host" "sudo mkdir -p '${OFFLINE_RESULTS_HOST_DIR}'"
-        if [[ "$DRY_RUN" == "1" ]]; then
-            log "  [dry-run] ${OFFLINE_RESULTS_DB_SOURCE} → ${host}:${destination}"
-        elif _is_local "$host"; then
-            sudo install -m 0444 "$OFFLINE_RESULTS_DB_SOURCE" "$destination"
-        else
-            local temporary="/tmp/${OFFLINE_RESULTS_DB_NAME}.$$"
-            scp -q "$OFFLINE_RESULTS_DB_SOURCE" "${host}:${temporary}"
-            _remote "$host" \
-                "sudo install -m 0444 '${temporary}' '${destination}' && rm -f '${temporary}'"
-        fi
-        log "  ✓ ${host}:${destination}"
+        (
+            local destination="${OFFLINE_RESULTS_HOST_DIR}/${OFFLINE_RESULTS_DB_NAME}"
+            _run "$host" "sudo mkdir -p '${OFFLINE_RESULTS_HOST_DIR}'"
+            if [[ "$DRY_RUN" == "1" ]]; then
+                log "  [dry-run] ${OFFLINE_RESULTS_DB_SOURCE} → ${host}:${destination}"
+                exit 0
+            fi
+
+            local current_sha=""
+            current_sha="$(_remote "$host" "test -f '${destination}' && sha256sum '${destination}' | awk '{print \$1}'" 2>/dev/null || true)"
+            if [[ "$current_sha" == "$source_sha" ]]; then
+                log "  ✓ ${host}:${destination} unchanged"
+                exit 0
+            fi
+
+            if _is_local "$host"; then
+                sudo install -m 0444 "$OFFLINE_RESULTS_DB_SOURCE" "$destination"
+            else
+                local temporary="/tmp/${OFFLINE_RESULTS_DB_NAME}.$$"
+                scp -q "$OFFLINE_RESULTS_DB_SOURCE" "${host}:${temporary}"
+                _remote "$host" \
+                    "sudo install -m 0444 '${temporary}' '${destination}' && rm -f '${temporary}'"
+            fi
+            log "  ✓ ${host}:${destination}"
+        ) &
+        db_pids+=("$!")
+        db_labels+=("$host")
     done
+
+    for i in "${!db_pids[@]}"; do
+        if ! wait "${db_pids[$i]}"; then
+            warn "  offline DB sync failed on ${db_labels[$i]}"
+            failures=$((failures + 1))
+        fi
+    done
+    [[ "$failures" -eq 0 ]] || die "${failures} offline DB sync task(s) failed"
 }
 
 label_nodes() {
@@ -1216,7 +1223,7 @@ label_nodes() {
         local type_var="AGENTS_${i}_NODETYPE"
         local node_type="${!type_var}"
 
-        kubectl label node "$node_name" "qonductor.io/node-type=${node_type}" --overwrite 2>/dev/null || true
+        local -a node_labels=("qonductor.io/node-type=${node_type}")
         _clear_qpu_node_labels "$node_name"
 
         local qpu_count_var="AGENTS_${i}_QPUS_COUNT"
@@ -1234,9 +1241,13 @@ label_nodes() {
             local qpu_name
             qpu_name="$(_qpu_instance_name "$node_name" "$j" "$qpu_file")"
 
-            kubectl label node "$node_name" "qonductor.io/backend-${qpu_name}=true" --overwrite 2>/dev/null || true
-            kubectl label node "$node_name" "qonductor.io/qpu-${j}=${qpu_name}" --overwrite 2>/dev/null || true
+            node_labels+=(
+                "qonductor.io/backend-${qpu_name}=true"
+                "qonductor.io/qpu-${j}=${qpu_name}"
+            )
         done
+
+        kubectl label node "$node_name" "${node_labels[@]}" --overwrite 2>/dev/null || true
 
         kubectl patch node "$node_name" --type=json \
             -p="[{\"op\":\"add\",\"path\":\"/status/capacity/quantum.ibm.com~1qpu\",\"value\":\"${qpu_count_for_agent}\"}]" \
@@ -1377,7 +1388,7 @@ deploy_qonductor_controllers() {
 }
 
 # ==============================================================================
-# Phase 7: Summary
+# Phase 6: Summary
 # ==============================================================================
 
 print_summary() {
@@ -1437,35 +1448,27 @@ main() {
     validate_config
     show_firewall_hints
 
-    log "Checking Docker on remote hosts …"
-    check_remote_docker "${SERVER_HOST}"
-    for ((i = 0; i < AGENTS_COUNT; i++)); do
-        local host_var="AGENTS_${i}_HOST"
-        check_remote_docker "${!host_var}"
-    done
+    check_remote_dockers
 
-    # ---- Phase 1: Teardown --------------------------------------------------
-    teardown_existing
-
-    # ---- Phase 2: Prepare images --------------------------------------------
+    # ---- Phase 1: Prepare images --------------------------------------------
     prepare_images
 
-    # ---- Phase 3: Distribute images -----------------------------------------
+    # ---- Phase 2: Distribute images.tar -------------------------------------
     distribute_images
 
-    # ---- Phase 4: Deploy k3s ------------------------------------------------
-    _banner "Phase 4: Deploy k3s cluster"
+    # ---- Phase 3: Deploy k3s ------------------------------------------------
+    _banner "Phase 3: Deploy k3s cluster"
     deploy_server
     wait_for_server
     fetch_kubeconfig
     deploy_agents
     wait_for_nodes
 
-    # ---- Phase 5: Containerd import -----------------------------------------
+    # ---- Phase 4: Containerd import -----------------------------------------
     import_containerd
 
-    # ---- Phase 6: Configure -------------------------------------------------
-    _banner "Phase 6: Configure cluster"
+    # ---- Phase 5: Configure -------------------------------------------------
+    _banner "Phase 5: Configure cluster"
     sync_qpu_profiles
     sync_offline_results
     label_nodes
@@ -1473,7 +1476,7 @@ main() {
     prepare_workflow_registry
     deploy_qonductor_controllers
 
-    # ---- Phase 7: Summary --------------------------------------------------
+    # ---- Phase 6: Summary --------------------------------------------------
     print_summary
 }
 

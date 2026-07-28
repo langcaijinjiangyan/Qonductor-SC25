@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scenario", default="")
     parser.add_argument("--priority", choices=("balanced", "fidelity", "jct"), default="balanced")
     parser.add_argument("--shots", type=int, default=1024)
-    parser.add_argument("--max-iterations", type=int, default=20)
+    parser.add_argument("--max-iterations", type=int, default=200)
     parser.add_argument("--quantum-timeout-seconds", type=float, default=21600.0)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--on-missing", choices=("fail", "skip"), default="fail")

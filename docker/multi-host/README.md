@@ -77,7 +77,7 @@ This will:
 2. Start the k3s server container on the server host
 3. Start k3s agent containers on each agent host
 4. Wait for all nodes to join and become Ready
-5. Build Qonductor Docker images and sync them to k3s nodes
+5. Load `images.tar`, copy it to remote hosts, and import images
 6. Deploy CRDs, operator, and device plugin
 7. Label nodes and configure QPU extended resources
 
@@ -95,20 +95,21 @@ kubectl get hybridworkflows -w
 ### 4. Tear down
 
 ```bash
-# Stop containers, keep data
+# Clean cluster state; preserves docker/multi-host/images.tar by default
 bash docker/multi-host/teardown-cluster.sh
 
-# Stop containers AND remove data volumes (DESTRUCTIVE)
-CLEANUP_VOLUMES=1 bash docker/multi-host/teardown-cluster.sh
+# Stop containers but preserve Docker data volumes
+CLEANUP_VOLUMES=0 bash docker/multi-host/teardown-cluster.sh
 ```
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `deploy-cluster.sh` | Full deployment: server → agents → labels → images → controllers |
+| `deploy-cluster.sh` | Full deployment: load/distribute `images.tar` → server → agents → labels → controllers |
 | `teardown-cluster.sh` | Stop/remove all k3s containers and optional cleanup |
-| `sync-images.sh` | Build Qonductor images and import into k3s containerd |
+| `offline-pack.sh` | Build/package required images into `images.tar` |
+| `load-images.sh` | Load `images.tar` into Docker and an existing k3s containerd |
 
 ## Environment Variables
 
@@ -116,9 +117,11 @@ CLEANUP_VOLUMES=1 bash docker/multi-host/teardown-cluster.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SKIP_FIREWALL` | `0` | Skip firewall port hints |
-| `SKIP_IMAGE_BUILD` | `0` | Skip Docker image build |
-| `SKIP_IMAGE_SYNC` | `0` | Skip image distribution to k3s |
+| `SKIP_FIREWALL` | `1` | Skip firewall port hints |
+| `IMAGES_TAR` | `docker/multi-host/images.tar` | Image bundle used by deployment |
+| `REMOTE_IMAGES_TAR` | `/tmp/qonductor-images.tar` | Remote path used when copying the image bundle |
+| `SKIP_IMAGE_DISTRIBUTE` | `0` | Skip copying/loading `images.tar` on remote hosts |
+| `SKIP_CONTAINERD_IMPORT` | `0` | Skip importing loaded Docker images into k3s containerd |
 | `SKIP_CONTROLLERS` | `0` | Skip operator/device-plugin deployment |
 | `DRY_RUN` | `0` | Print commands without executing |
 
@@ -126,17 +129,24 @@ CLEANUP_VOLUMES=1 bash docker/multi-host/teardown-cluster.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLEANUP_VOLUMES` | `0` | Also remove Docker data volumes |
-| `CLEANUP_REGISTRY` | `0` | Also remove local Docker registry |
+| `CLEANUP_VOLUMES` | `1` | Remove k3s Docker data volumes |
+| `CLEANUP_IMAGES` | `1` | Remove Qonductor Docker images |
+| `CLEANUP_REGISTRY` | `1` | Remove local Docker registry container/volume |
+| `CLEANUP_RANCHER` | `1` | Remove host `/etc/rancher` k3s state |
+| `CLEANUP_QONDUCTOR` | `1` | Remove host `/etc/qonductor` QPU/offline state |
+| `CLEANUP_QONDUCTOR_K8S` | `1` | Delete Qonductor K8s resources before teardown |
+| `CLEANUP_REMOTE_IMAGES_TAR` | `1` | Remove distributed `/tmp/qonductor-images.tar` copies |
+| `CLEANUP_DEPLOY_LOGS` | `1` | Remove local `data/deploy_logs` |
+| `CLEANUP_KUBECONFIG_TMP` | `1` | Remove local `/tmp/k3s-multi-host-config.yaml` |
+| `CLEANUP_IMAGES_TAR` | `0` | Remove local `docker/multi-host/images.tar` |
 | `DRY_RUN` | `0` | Print commands without executing |
 
-### sync-images.sh
+### offline-pack.sh
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BUILD_ONLY` | `0` | Only build images, skip push/import |
-| `SKIP_BUILD` | `0` | Skip Docker image builds |
-| `REGISTRY_PORT` | `5000` | Local Docker registry port |
+| `OUTPUT_FILE` | `images.tar` | Output tar filename |
+| `SKIP_QONDUCTOR` | `0` | Skip rebuilding Qonductor images |
 
 ## Networking
 
@@ -156,13 +166,16 @@ These ports **must** be reachable between all cluster hosts.
 Unlike Kind (`kind load docker-image`), k3s uses its own embedded
 containerd. Images must be imported into the `k8s.io` namespace:
 
-```bash
-# On the server host:
-docker save qonductor-operator:latest | \
-  docker exec -i k3s-server ctr -n k8s.io images import -
+`deploy-cluster.sh` expects `images.tar` to exist.  It loads the tarball into
+local Docker, copies the same tarball to remote hosts, runs `docker load -i`,
+then imports the loaded Docker images into each k3s container's embedded
+containerd.
 
-# After rebuilding images, re-sync them:
-bash docker/multi-host/sync-images.sh
+```bash
+cd docker/multi-host
+OUTPUT_FILE=images.tar bash offline-pack.sh
+cd ../..
+bash docker/multi-host/deploy-cluster.sh
 ```
 
 ## Limitations
