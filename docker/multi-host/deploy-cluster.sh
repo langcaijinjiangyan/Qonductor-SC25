@@ -56,6 +56,9 @@
 #   QONDUCTOR_EXECUTION_BACKEND aer or offline-replay (default: aer)
 #   OFFLINE_RESULTS_DB_SOURCE source SQLite path for offline-replay
 #   QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION offline database noise-model key
+#   QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE enable per-QPU queue controllers in device-plugin (default: 1)
+#   QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE enable legacy central queue controller in operator (default: 0)
+#   QONDUCTOR_QPU_QUEUE_RECONCILE_INTERVAL node-local queue fallback reconcile interval seconds (default: 30)
 # ============================================================================
 
 set -euo pipefail
@@ -84,9 +87,9 @@ OPERATOR_MEMORY_REQUEST="${OPERATOR_MEMORY_REQUEST:-2Gi}"
 OPERATOR_CPU_LIMIT="${OPERATOR_CPU_LIMIT:-4}"
 OPERATOR_MEMORY_LIMIT="${OPERATOR_MEMORY_LIMIT:-4Gi}"
 SCHEDULING_INTERVAL="${SCHEDULING_INTERVAL:-10}"
-SCHEDULING_THRESHOLD="${SCHEDULING_THRESHOLD:-5}"
+SCHEDULING_THRESHOLD="${SCHEDULING_THRESHOLD:-1}"
 SCHEDULING_BATCH_SIZE="${SCHEDULING_BATCH_SIZE:-120}"
-TRANSPILATION_WORKERS="${TRANSPILATION_WORKERS:-8}"
+TRANSPILATION_WORKERS="${TRANSPILATION_WORKERS:-2}"
 TRANSPILATION_CACHE_ENABLED="${TRANSPILATION_CACHE_ENABLED:-1}"
 TRANSPILATION_CACHE_SIZE="${TRANSPILATION_CACHE_SIZE:-256}"
 TRANSPILATION_COUNT="${TRANSPILATION_COUNT:-1}"
@@ -95,6 +98,9 @@ OFFLINE_RESULTS_DB_SOURCE="${OFFLINE_RESULTS_DB_SOURCE:-${PROJECT_ROOT}/data/off
 OFFLINE_RESULTS_HOST_DIR="/etc/qonductor/offline-results"
 OFFLINE_RESULTS_DB_NAME="quantum_offline_results.sqlite"
 OFFLINE_NOISE_MODEL_VERSION="${QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION:-qpu-json-depolarizing-readout-v1}"
+ENABLE_LOCAL_QPU_QUEUE="${QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE:-1}"
+ENABLE_CENTRAL_QPU_QUEUE="${QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE:-0}"
+QPU_QUEUE_RECONCILE_INTERVAL="${QONDUCTOR_QPU_QUEUE_RECONCILE_INTERVAL:-30}"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
@@ -373,6 +379,16 @@ validate_config() {
     [[ -n "${SERVER_HOST:-}" && "${SERVER_HOST:-}" != "null" ]] || die "server.host is required"
     [[ "$TRANSPILATION_CACHE_ENABLED" =~ ^[01]$ ]] || \
         die "TRANSPILATION_CACHE_ENABLED must be 0 or 1"
+    [[ "$ENABLE_LOCAL_QPU_QUEUE" =~ ^[01]$ ]] || \
+        die "QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE must be 0 or 1"
+    [[ "$ENABLE_CENTRAL_QPU_QUEUE" =~ ^[01]$ ]] || \
+        die "QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE must be 0 or 1"
+    if [[ "$ENABLE_LOCAL_QPU_QUEUE" == "$ENABLE_CENTRAL_QPU_QUEUE" ]]; then
+        die "Enable exactly one QPU queue controller mode: local=${ENABLE_LOCAL_QPU_QUEUE}, central=${ENABLE_CENTRAL_QPU_QUEUE}"
+    fi
+    QPU_QUEUE_RECONCILE_INTERVAL="$QPU_QUEUE_RECONCILE_INTERVAL" python3 -c \
+        'import os; value=float(os.environ["QPU_QUEUE_RECONCILE_INTERVAL"]); assert value > 0' || \
+        die "QONDUCTOR_QPU_QUEUE_RECONCILE_INTERVAL must be a positive number"
     [[ "$TRANSPILATION_CACHE_SIZE" =~ ^[1-9][0-9]*$ ]] || \
         die "TRANSPILATION_CACHE_SIZE must be a positive integer"
     [[ "$SCHEDULING_BATCH_SIZE" =~ ^[1-9][0-9]*$ ]] || \
@@ -1266,8 +1282,14 @@ deploy_qonductor_controllers() {
     kubectl apply -f "${DEPLOY_DIR}/operator/rbac.yaml"
     local rendered_config
     local transpilation_cache_enabled_yaml="false"
+    local enable_local_qpu_queue_yaml="false"
+    local enable_central_qpu_queue_yaml="false"
     [[ "$TRANSPILATION_CACHE_ENABLED" == "1" ]] && \
         transpilation_cache_enabled_yaml="true"
+    [[ "$ENABLE_LOCAL_QPU_QUEUE" == "1" ]] && \
+        enable_local_qpu_queue_yaml="true"
+    [[ "$ENABLE_CENTRAL_QPU_QUEUE" == "1" ]] && \
+        enable_central_qpu_queue_yaml="true"
     rendered_config="$(mktemp /tmp/qonductor-operator-config.XXXXXX.yaml)"
     sed -e "s|__SCHEDULING_INTERVAL__|${SCHEDULING_INTERVAL}|g" \
         -e "s|__SCHEDULING_THRESHOLD__|${SCHEDULING_THRESHOLD}|g" \
@@ -1285,7 +1307,14 @@ deploy_qonductor_controllers() {
         -l app=qonductor,component=qpu-profile \
         --ignore-not-found=true 2>/dev/null || true
 
-    kubectl apply -f "${DEPLOY_DIR}/device-plugin/daemonset.yaml"
+    local rendered_device_plugin
+    rendered_device_plugin="$(mktemp /tmp/qonductor-device-plugin.XXXXXX.yaml)"
+    sed -e "s|__ENABLE_LOCAL_QPU_QUEUE__|${enable_local_qpu_queue_yaml}|g" \
+        -e "s|__QPU_QUEUE_RECONCILE_INTERVAL__|${QPU_QUEUE_RECONCILE_INTERVAL}|g" \
+        "${DEPLOY_DIR}/device-plugin/daemonset.yaml" > "$rendered_device_plugin"
+
+    kubectl apply -f "$rendered_device_plugin"
+    rm -f "$rendered_device_plugin"
 
     log "Waiting for QPU device-plugin rollout …"
     kubectl rollout status daemonset/qonductor-qpu-device-plugin \
@@ -1315,6 +1344,7 @@ deploy_qonductor_controllers() {
 
     log "  Operator resources: requests=${OPERATOR_CPU_REQUEST} CPU/${OPERATOR_MEMORY_REQUEST}, limits=${OPERATOR_CPU_LIMIT} CPU/${OPERATOR_MEMORY_LIMIT}"
     log "  Quantum scheduler: interval=${SCHEDULING_INTERVAL}s, threshold=${SCHEDULING_THRESHOLD}, batch size=${SCHEDULING_BATCH_SIZE}, transpilation workers=${TRANSPILATION_WORKERS}, cache=${TRANSPILATION_CACHE_ENABLED}, cache size=${TRANSPILATION_CACHE_SIZE}, transpilation count=${TRANSPILATION_COUNT}"
+    log "  QPU queue controller: local=${ENABLE_LOCAL_QPU_QUEUE}, central=${ENABLE_CENTRAL_QPU_QUEUE}, fallback interval=${QPU_QUEUE_RECONCILE_INTERVAL}s"
     log "  Quantum execution backend: ${QUANTUM_EXECUTION_BACKEND}"
 
     local rendered_operator
@@ -1333,6 +1363,7 @@ deploy_qonductor_controllers() {
         -e "s|__TRANSPILATION_COUNT__|${TRANSPILATION_COUNT}|g" \
         -e "s|__QUANTUM_EXECUTION_BACKEND__|${QUANTUM_EXECUTION_BACKEND}|g" \
         -e "s|__OFFLINE_NOISE_MODEL_VERSION__|${OFFLINE_NOISE_MODEL_VERSION}|g" \
+        -e "s|__ENABLE_CENTRAL_QPU_QUEUE__|${enable_central_qpu_queue_yaml}|g" \
         "${DEPLOY_DIR}/operator/deployment.yaml" > "$rendered_operator"
 
     kubectl apply -f "$rendered_operator"

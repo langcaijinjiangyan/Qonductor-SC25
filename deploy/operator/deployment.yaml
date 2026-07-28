@@ -66,6 +66,8 @@ spec:
               value: "__QUANTUM_EXECUTION_BACKEND__"
             - name: QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION
               value: "__OFFLINE_NOISE_MODEL_VERSION__"
+            - name: QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE
+              value: "__ENABLE_CENTRAL_QPU_QUEUE__"
             - name: QISKIT_PARALLEL
               value: "False"
           resources:

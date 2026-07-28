@@ -14,6 +14,7 @@
 #   CLEANUP_REGISTRY=0   skip removing the local Docker registry container (default: 1)
 #   CLEANUP_RANCHER=0    skip removing /etc/rancher (default: 1, cleans stale passwords)
 #   CLEANUP_QONDUCTOR=0     skip removing /etc/qonductor (default: 1)
+#   CLEANUP_QONDUCTOR_K8S=0 skip deleting Qonductor K8s workloads before teardown (default: 1)
 #   CLEANUP_IMAGES_TAR=0    skip removing images.tar (default: 0, preserve the image bundle)
 #   DRY_RUN=1               print commands without executing
 # ============================================================================
@@ -28,6 +29,7 @@ CLEANUP_REGISTRY="${CLEANUP_REGISTRY:-1}"
 CLEANUP_IMAGES="${CLEANUP_IMAGES:-1}"
 CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
 CLEANUP_QONDUCTOR="${CLEANUP_QONDUCTOR:-1}"
+CLEANUP_QONDUCTOR_K8S="${CLEANUP_QONDUCTOR_K8S:-1}"
 CLEANUP_IMAGES_TAR="${CLEANUP_IMAGES_TAR:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 
@@ -155,6 +157,39 @@ remove_qonductor_state() {
     log "  ✓ /etc/qonductor removed on ${host}"
 }
 
+cleanup_qonductor_k8s_resources() {
+    if [[ "$CLEANUP_QONDUCTOR_K8S" != "1" ]]; then
+        warn "CLEANUP_QONDUCTOR_K8S=0 — skipping Qonductor K8s workload cleanup."
+        return 0
+    fi
+    if ! command -v kubectl >/dev/null 2>&1; then
+        warn "kubectl not found — skipping Qonductor K8s workload cleanup."
+        return 0
+    fi
+    if ! kubectl get namespace default >/dev/null 2>&1; then
+        warn "Kubernetes API is not reachable — skipping Qonductor K8s workload cleanup."
+        return 0
+    fi
+
+    log "Deleting Qonductor K8s workloads before container teardown …"
+    if [[ "$DRY_RUN" == "1" ]]; then
+        echo "  [dry-run] kubectl delete deployment/qonductor-operator daemonset/qonductor-qpu-device-plugin -n default --ignore-not-found=true --wait=true"
+        echo "  [dry-run] kubectl delete configmap/qonductor-config -n default --ignore-not-found=true"
+        echo "  [dry-run] kubectl delete configmap -n default -l app=qonductor,component=qpu-profile --ignore-not-found=true"
+        return 0
+    fi
+
+    kubectl delete deployment/qonductor-operator \
+        daemonset/qonductor-qpu-device-plugin \
+        -n default --ignore-not-found=true --wait=true 2>/dev/null || true
+    kubectl delete configmap/qonductor-config \
+        -n default --ignore-not-found=true 2>/dev/null || true
+    kubectl delete configmap -n default \
+        -l app=qonductor,component=qpu-profile \
+        --ignore-not-found=true 2>/dev/null || true
+    log "  ✓ Qonductor operator/device-plugin resources deleted"
+}
+
 # ---------------------------------------------------------------------------
 # Clean up Docker images
 # ---------------------------------------------------------------------------
@@ -268,6 +303,10 @@ main() {
     local server_host="${SERVER_HOST}"
     local server_container="${SERVER_CONTAINERNAME}"
     local cluster_name="${CLUSTER_NAME}"
+
+    # Delete the operator and device-plugin DaemonSet first so node-local
+    # per-QPU queue controller child processes can exit cleanly.
+    cleanup_qonductor_k8s_resources
 
     # ---- Agents first (they depend on the server) ---------------------------
     for ((i = 0; i < AGENTS_COUNT; i++)); do
@@ -429,6 +468,9 @@ main() {
     fi
     if [[ "$CLEANUP_QONDUCTOR" != "1" ]]; then
         warn "/etc/qonductor was preserved. Set CLEANUP_QONDUCTOR=1 to remove stale QPU state."
+    fi
+    if [[ "$CLEANUP_QONDUCTOR_K8S" != "1" ]]; then
+        warn "Qonductor K8s workloads were not explicitly deleted before teardown."
     fi
     if [[ "$CLEANUP_IMAGES_TAR" != "1" ]]; then
         warn "images.tar was preserved. Set CLEANUP_IMAGES_TAR=1 to remove it."

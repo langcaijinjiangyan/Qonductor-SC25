@@ -52,13 +52,17 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE
+              value: "__ENABLE_LOCAL_QPU_QUEUE__"
+            - name: QONDUCTOR_QPU_QUEUE_RECONCILE_INTERVAL
+              value: "__QPU_QUEUE_RECONCILE_INTERVAL__"
           resources:
             requests:
               cpu: "50m"
               memory: "128Mi"
             limits:
               cpu: "100m"
-              memory: "512Mi"
+              memory: "1Gi"
           volumeMounts:
             - name: device-plugin
               mountPath: /var/lib/kubelet/device-plugins

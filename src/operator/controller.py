@@ -1109,6 +1109,12 @@ def main() -> None:
         "metrics-port",
         9100,
     )
+    enable_central_qpu_queue = _bool_config(
+        operator_config,
+        "QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE",
+        "enable-central-qpu-queue",
+        True,
+    )
 
     quantum_controller = QuantumSchedulerController(
         mode=mode,
@@ -1126,15 +1132,23 @@ def main() -> None:
     quantum_thread.start()
 
     # QPU queue controller — manages per-QPU FIFO serial execution.
-    queue_controller = QPUQueueController(
-        mode=mode,
-        k8s_client=quantum_controller.k8s,
-    )
-    queue_thread = threading.Thread(
-        target=queue_controller.run,
-        daemon=True,
-    )
-    queue_thread.start()
+    # Multi-host deployments can move this responsibility to the node-local
+    # device-plugin queue agents by setting QONDUCTOR_ENABLE_CENTRAL_QPU_QUEUE=0.
+    queue_controller = None
+    if enable_central_qpu_queue:
+        queue_controller = QPUQueueController(
+            mode=mode,
+            k8s_client=quantum_controller.k8s,
+        )
+        queue_thread = threading.Thread(
+            target=queue_controller.run,
+            daemon=True,
+        )
+        queue_thread.start()
+    else:
+        logger.info(
+            "Central QPUQueueController disabled; expecting node-local queue agents",
+        )
 
     workflow_controller = HybridWorkflowController(
         mode=mode,
@@ -1152,7 +1166,8 @@ def main() -> None:
     finally:
         workflow_controller.stop()
         quantum_controller.stop()
-        queue_controller.stop()
+        if queue_controller is not None:
+            queue_controller.stop()
         metrics_server.shutdown()
         metrics_server.server_close()
         quantum_thread.join(timeout=5)

@@ -18,6 +18,7 @@ from src.operator.k8s_client import K8sClient
 from src.utils.logging_config import configure_logging
 from src.workflow.qaoa_runtime import (
     DEFAULT_QUANTUM_TIMEOUT_SECONDS,
+    QuantumResultCallbackServer,
     initialize_parameters,
     legacy_c_random,
     offline_parameter_pair,
@@ -144,6 +145,7 @@ def run_vqe_spsa_driver(
     legacy_rng = legacy_c_random(int(cfg.get("seed", 12345)))
     pinned_qpu = ""
     history = []
+    callback_server = QuantumResultCallbackServer.from_env(mode)
 
     for iteration in range(max_iterations):
         a = 0.18 / math.pow(float(iteration + 1), 0.602)
@@ -193,6 +195,7 @@ def run_vqe_spsa_driver(
             iteration=iteration,
             eval_label="plus",
             preferred_qpu=pinned_qpu,
+            result_callback=callback_server,
             namespace=namespace,
         )
         plus_result = None
@@ -200,6 +203,7 @@ def run_vqe_spsa_driver(
             plus_result = wait_for_quantum_result(
                 client, plus_qj["metadata"]["name"],
                 timeout_s=timeout_s, poll_s=poll_s,
+                callback_server=callback_server,
             )
             if not pinned_qpu:
                 pinned_qpu = quantum_job_assigned_qpu(
@@ -231,16 +235,19 @@ def run_vqe_spsa_driver(
             iteration=iteration,
             eval_label="minus",
             preferred_qpu=pinned_qpu,
+            result_callback=callback_server,
             namespace=namespace,
         )
         if plus_result is None:
             plus_result = wait_for_quantum_result(
                 client, plus_qj["metadata"]["name"],
                 timeout_s=timeout_s, poll_s=poll_s,
+                callback_server=callback_server,
             )
         minus_result = wait_for_quantum_result(
             client, minus_qj["metadata"]["name"],
             timeout_s=timeout_s, poll_s=poll_s,
+            callback_server=callback_server,
         )
 
         objective_plus = counts_energy_average(plus_result, h_field, h_coupling, qubits)
@@ -275,4 +282,6 @@ def run_vqe_spsa_driver(
         "history": history,
     }
     print(json.dumps({"event": "vqe_complete", **summary}))
+    if callback_server is not None:
+        callback_server.close_after_fallback_drain()
     return summary

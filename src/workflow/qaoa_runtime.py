@@ -9,12 +9,14 @@ algorithm remains dynamic.
 
 from __future__ import annotations
 
+import http.server
 import json
 import math
 import os
 import random
 import re
 import sqlite3
+import threading
 import time
 import uuid
 from collections.abc import Iterator
@@ -29,6 +31,7 @@ from src.operator.k8s_client import (
 from src.utils.logging_config import configure_logging
 
 DEFAULT_QUANTUM_TIMEOUT_SECONDS = 21600.0
+RESULT_CALLBACK_PATH = "/qonductor/quantum-result"
 
 DEFAULT_QAOA_EDGES: tuple[tuple[int, int], ...] = (
     (0, 1), (0, 4), (0, 5), (0, 6), (0, 8), (0, 9),
@@ -78,6 +81,115 @@ def quantum_job_assigned_qpu(client: K8sClient, name: str) -> str:
     if not assigned_qpu or assigned_qpu == "none":
         raise RuntimeError(f"QuantumJob {name!r} completed without an assigned QPU")
     return assigned_qpu
+
+
+def _env_enabled(name: str, default: str = "1") -> bool:
+    value = os.environ.get(name, default).strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+class QuantumResultCallbackServer:
+    """Small in-Pod callback endpoint used by dynamic classical drivers."""
+
+    def __init__(self, *, advertised_host: str, port: int) -> None:
+        self.advertised_host = advertised_host
+        self.port = port
+        self.token = uuid.uuid4().hex
+        self.url = f"http://{advertised_host}:{port}{RESULT_CALLBACK_PATH}"
+        self._condition = threading.Condition()
+        self._statuses: dict[str, dict[str, Any]] = {}
+        self.fallback_used = False
+        self._server: http.server.ThreadingHTTPServer | None = None
+        self._thread: threading.Thread | None = None
+
+    @classmethod
+    def from_env(cls, mode: str) -> "QuantumResultCallbackServer | None":
+        if mode != "k8s" or not _env_enabled("QONDUCTOR_RESULT_CALLBACK_ENABLED"):
+            return None
+        advertised_host = os.environ.get("QONDUCTOR_DRIVER_CALLBACK_HOST", "").strip()
+        if not advertised_host:
+            return None
+        port = int(os.environ.get("QONDUCTOR_DRIVER_CALLBACK_PORT", "9188"))
+        server = cls(advertised_host=advertised_host, port=port)
+        server.start()
+        return server
+
+    def start(self) -> None:
+        if self._server is not None:
+            return
+
+        parent = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                if self.path != RESULT_CALLBACK_PATH:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                if self.headers.get("X-Qonductor-Callback-Token", "") != parent.token:
+                    self.send_response(403)
+                    self.end_headers()
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", "0") or "0")
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    quantum_job = str(payload.get("quantumJob") or "")
+                    status = payload.get("status")
+                    if not quantum_job or not isinstance(status, dict):
+                        raise ValueError("callback payload requires quantumJob and status")
+                except Exception as exc:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(str(exc).encode("utf-8"))
+                    return
+
+                with parent._condition:
+                    parent._statuses[quantum_job] = status
+                    parent._condition.notify_all()
+                self.send_response(204)
+                self.end_headers()
+
+            def log_message(self, format: str, *args: Any) -> None:
+                return
+
+        self._server = http.server.ThreadingHTTPServer(("0.0.0.0", self.port), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
+
+    def wait_for_status(self, name: str, timeout_s: float) -> dict[str, Any] | None:
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        with self._condition:
+            while name not in self._statuses:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self._condition.wait(timeout=remaining)
+            return self._statuses.pop(name)
+
+    def mark_fallback(self) -> None:
+        self.fallback_used = True
+
+    def close_after_fallback_drain(self) -> None:
+        if self._server is None:
+            return
+        if self.fallback_used:
+            drain_s = max(
+                0.0,
+                float(os.environ.get(
+                    "QONDUCTOR_RESULT_CALLBACK_DRAIN_SECONDS",
+                    "1.0",
+                )),
+            )
+            if drain_s > 0:
+                time.sleep(drain_s)
+        self.close()
+
+    def close(self) -> None:
+        if self._server is None:
+            return
+        self._server.shutdown()
+        self._server.server_close()
+        self._server = None
 
 
 def offline_parameter_pair(
@@ -239,6 +351,7 @@ def submit_quantum_eval(
     iteration: int,
     eval_label: str,
     preferred_qpu: str = "",
+    result_callback: QuantumResultCallbackServer | None = None,
     namespace: str = "default",
 ) -> dict:
     name = _rfc1123_name(
@@ -279,9 +392,29 @@ def submit_quantum_eval(
         },
         "status": {"phase": "Pending"},
     }
+    if result_callback is not None:
+        body["metadata"]["annotations"] = {
+            "qonductor.io/result-callback-url": result_callback.url,
+            "qonductor.io/result-callback-token": result_callback.token,
+        }
     if preferred_qpu:
         body["spec"]["preferredQPU"] = preferred_qpu
     return client.create_cr(QUANTUM_JOB_PLURAL, namespace=namespace, body=body)
+
+
+def _result_from_quantum_status(
+    name: str,
+    status: dict[str, Any],
+) -> tuple[bool, dict | None]:
+    phase = status.get("phase", "")
+    if phase == "Completed":
+        result = status.get("result")
+        if result is None:
+            raise RuntimeError(f"QuantumJob {name!r} completed without result")
+        return True, result
+    if phase == "Failed":
+        raise RuntimeError(f"QuantumJob {name!r} failed: {status}")
+    return False, None
 
 
 def wait_for_quantum_result(
@@ -290,22 +423,35 @@ def wait_for_quantum_result(
     *,
     timeout_s: float = DEFAULT_QUANTUM_TIMEOUT_SECONDS,
     poll_s: float = 2.0,
+    callback_server: QuantumResultCallbackServer | None = None,
 ) -> dict:
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
+        if callback_server is not None:
+            remaining = max(0.0, deadline - time.monotonic())
+            fallback_poll_s = float(os.environ.get(
+                "QONDUCTOR_RESULT_CALLBACK_FALLBACK_POLL_SECONDS",
+                "30",
+            ))
+            status = callback_server.wait_for_status(
+                name,
+                timeout_s=min(fallback_poll_s, remaining),
+            )
+            if status is not None:
+                done, result = _result_from_quantum_status(name, status)
+                if done:
+                    return result
+
         qj = client.get_cr(QUANTUM_JOB_PLURAL, name)
         if not qj:
             raise RuntimeError(f"QuantumJob {name!r} disappeared")
-        status = qj.get("status", {})
-        phase = status.get("phase", "")
-        if phase == "Completed":
-            result = status.get("result")
-            if result is None:
-                raise RuntimeError(f"QuantumJob {name!r} completed without result")
+        done, result = _result_from_quantum_status(name, qj.get("status", {}))
+        if done:
+            if callback_server is not None:
+                callback_server.mark_fallback()
             return result
-        if phase == "Failed":
-            raise RuntimeError(f"QuantumJob {name!r} failed: {status}")
-        time.sleep(poll_s)
+        if callback_server is None:
+            time.sleep(poll_s)
     raise TimeoutError(f"Timed out waiting for QuantumJob {name!r}")
 
 
@@ -361,6 +507,7 @@ def run_qaoa_spsa_driver(
     legacy_rng = legacy_c_random(int(cfg.get("seed", 12345)))
     pinned_qpu = ""
     history = []
+    callback_server = QuantumResultCallbackServer.from_env(mode)
 
     for iteration in range(max_iterations):
         a = 0.18 / math.pow(float(iteration + 1), 0.602)
@@ -409,6 +556,7 @@ def run_qaoa_spsa_driver(
             iteration=iteration,
             eval_label="plus",
             preferred_qpu=pinned_qpu,
+            result_callback=callback_server,
             namespace=namespace,
         )
         plus_result = None
@@ -416,6 +564,7 @@ def run_qaoa_spsa_driver(
             plus_result = wait_for_quantum_result(
                 client, plus_qj["metadata"]["name"],
                 timeout_s=timeout_s, poll_s=poll_s,
+                callback_server=callback_server,
             )
             if not pinned_qpu:
                 pinned_qpu = quantum_job_assigned_qpu(
@@ -447,16 +596,19 @@ def run_qaoa_spsa_driver(
             iteration=iteration,
             eval_label="minus",
             preferred_qpu=pinned_qpu,
+            result_callback=callback_server,
             namespace=namespace,
         )
         if plus_result is None:
             plus_result = wait_for_quantum_result(
                 client, plus_qj["metadata"]["name"],
                 timeout_s=timeout_s, poll_s=poll_s,
+                callback_server=callback_server,
             )
         minus_result = wait_for_quantum_result(
             client, minus_qj["metadata"]["name"],
             timeout_s=timeout_s, poll_s=poll_s,
+            callback_server=callback_server,
         )
 
         avg_plus = counts_average(plus_result, edges, qubits)
@@ -493,4 +645,6 @@ def run_qaoa_spsa_driver(
         "history": history,
     }
     print(json.dumps({"event": "qaoa_complete", **summary}))
+    if callback_server is not None:
+        callback_server.close_after_fallback_drain()
     return summary

@@ -30,6 +30,8 @@ import sqlite3
 import sys
 import time
 from typing import Any
+import urllib.error
+import urllib.request
 
 from src.utils.logging_config import configure_logging
 from qiskit import QuantumCircuit, qasm3, transpile
@@ -312,6 +314,55 @@ def _patch_quantum_job_status(status: dict[str, Any]) -> None:
         }), file=sys.stderr)
 
 
+def _notify_result_callback(status: dict[str, Any]) -> None:
+    callback_url = os.environ.get("QONDUCTOR_RESULT_CALLBACK_URL", "")
+    qj_name = os.environ.get("QUANTUM_JOB_NAME", "")
+    if not callback_url or not qj_name:
+        return
+
+    timeout_s = float(os.environ.get("QONDUCTOR_RESULT_CALLBACK_TIMEOUT_SECONDS", "2"))
+    attempts = max(
+        1,
+        int(os.environ.get("QONDUCTOR_RESULT_CALLBACK_ATTEMPTS", "5")),
+    )
+    retry_s = max(
+        0.0,
+        float(os.environ.get("QONDUCTOR_RESULT_CALLBACK_RETRY_SECONDS", "0.25")),
+    )
+    payload = json.dumps({
+        "quantumJob": qj_name,
+        "status": status,
+    }).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "X-Qonductor-Callback-Token": os.environ.get(
+            "QONDUCTOR_RESULT_CALLBACK_TOKEN", ""
+        ),
+    }
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        request = urllib.request.Request(
+            callback_url,
+            data=payload,
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                response.read()
+            return
+        except (OSError, urllib.error.URLError) as exc:
+            last_error = exc
+            if attempt < attempts and retry_s > 0:
+                time.sleep(retry_s)
+
+    print(json.dumps({
+        "warning": "failed to notify result callback",
+        "attempts": attempts,
+        "error": str(last_error),
+    }), file=sys.stderr)
+
+
 def main() -> None:
     configure_logging()
 
@@ -431,11 +482,12 @@ def main() -> None:
         }
         if actual_fidelity is not None:
             status_patch["actualFidelity"] = actual_fidelity
+        _notify_result_callback(status_patch)
         _patch_quantum_job_status(status_patch)
     except Exception as exc:
         error = {"error": str(exc)}
         print(json.dumps(error))
-        _patch_quantum_job_status({
+        status_patch = {
             "phase": "Failed",
             "conditions": [{
                 "type": "ExecutionFailed",
@@ -443,7 +495,9 @@ def main() -> None:
                 "reason": str(exc),
             }],
             "result": error,
-        })
+        }
+        _notify_result_callback(status_patch)
+        _patch_quantum_job_status(status_patch)
         sys.exit(1)
 
 

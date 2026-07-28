@@ -1033,6 +1033,40 @@ def _qonductor_runtime_env() -> list[dict[str, str]]:
     ]
 
 
+def _driver_callback_env() -> list[dict]:
+    """Environment for result callbacks into classical driver Pods."""
+    return [
+        {
+            "name": "QONDUCTOR_RESULT_CALLBACK_ENABLED",
+            "value": os.environ.get("QONDUCTOR_RESULT_CALLBACK_ENABLED", "1"),
+        },
+        {
+            "name": "QONDUCTOR_DRIVER_CALLBACK_HOST",
+            "valueFrom": {
+                "fieldRef": {"fieldPath": "status.podIP"},
+            },
+        },
+        {
+            "name": "QONDUCTOR_DRIVER_CALLBACK_PORT",
+            "value": os.environ.get("QONDUCTOR_DRIVER_CALLBACK_PORT", "9188"),
+        },
+        {
+            "name": "QONDUCTOR_RESULT_CALLBACK_FALLBACK_POLL_SECONDS",
+            "value": os.environ.get(
+                "QONDUCTOR_RESULT_CALLBACK_FALLBACK_POLL_SECONDS",
+                "30",
+            ),
+        },
+        {
+            "name": "QONDUCTOR_RESULT_CALLBACK_DRAIN_SECONDS",
+            "value": os.environ.get(
+                "QONDUCTOR_RESULT_CALLBACK_DRAIN_SECONDS",
+                "1.0",
+            ),
+        },
+    ]
+
+
 def _rfc1123_fragment(value: str) -> str:
     """Normalize one identifier fragment for Kubernetes resource names."""
     name = re.sub(r"[^a-z0-9.-]+", "-", str(value).lower())
@@ -1186,6 +1220,7 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
 
     runtime_env = [
         *_qonductor_runtime_env(),
+        *_driver_callback_env(),
         {"name": "QONDUCTOR_MODE", "value": mode},
         {"name": "QONDUCTOR_NAMESPACE", "value": cr.get("metadata", {}).get("namespace", "default")},
         {"name": "QONDUCTOR_WORKFLOW_NAME", "value": workflow_name},
@@ -1200,6 +1235,13 @@ def create_k8s_job_for_step(step_node, cr: dict, container_spec: dict | None = N
             "imagePullPolicy": image_pull_policy,
             "command": command,
             "env": _merge_env(container_env, runtime_env),
+            "ports": [{
+                "containerPort": int(os.environ.get(
+                    "QONDUCTOR_DRIVER_CALLBACK_PORT", "9188",
+                )),
+                "name": "qresult",
+                "protocol": "TCP",
+            }],
             "resources": {
                 "limits": resources,
                 "requests": {k: v for k, v in resources.items()},
@@ -1281,7 +1323,9 @@ def create_quantum_execution_job(
     """
     client = client_override or _get_client(mode)
     qj_spec = quantum_job_cr.get("spec", {})
-    qj_name = quantum_job_cr.get("metadata", {}).get("name", "")
+    qj_metadata = quantum_job_cr.get("metadata", {})
+    qj_name = qj_metadata.get("name", "")
+    qj_annotations = qj_metadata.get("annotations", {}) or {}
     workflow_ref = qj_spec.get("workflowRef", "")
     step_id = qj_spec.get("stepId", "")
     execution_backend = os.environ.get(
@@ -1413,6 +1457,29 @@ def create_quantum_execution_job(
                             {"name": "QUANTUM_JOB_NAME", "value": qj_name},
                             {"name": "QONDUCTOR_WORKFLOW_NAME", "value": workflow_ref},
                             {"name": "QPU_NAME", "value": qpu_name},
+                            {"name": "QONDUCTOR_RESULT_CALLBACK_URL",
+                             "value": qj_annotations.get(
+                                 "qonductor.io/result-callback-url", "",
+                             )},
+                            {"name": "QONDUCTOR_RESULT_CALLBACK_TOKEN",
+                             "value": qj_annotations.get(
+                                 "qonductor.io/result-callback-token", "",
+                             )},
+                            {"name": "QONDUCTOR_RESULT_CALLBACK_TIMEOUT_SECONDS",
+                             "value": os.environ.get(
+                                 "QONDUCTOR_RESULT_CALLBACK_TIMEOUT_SECONDS",
+                                 "2",
+                             )},
+                            {"name": "QONDUCTOR_RESULT_CALLBACK_ATTEMPTS",
+                             "value": os.environ.get(
+                                 "QONDUCTOR_RESULT_CALLBACK_ATTEMPTS",
+                                 "5",
+                             )},
+                            {"name": "QONDUCTOR_RESULT_CALLBACK_RETRY_SECONDS",
+                             "value": os.environ.get(
+                                 "QONDUCTOR_RESULT_CALLBACK_RETRY_SECONDS",
+                                 "0.25",
+                             )},
                             {"name": "QONDUCTOR_EXECUTION_BACKEND",
                              "value": execution_backend},
                             {"name": "QONDUCTOR_OFFLINE_RESULTS_PATH",

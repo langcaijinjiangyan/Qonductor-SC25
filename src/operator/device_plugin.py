@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import logging
+import multiprocessing
 import threading
 import time
 from dataclasses import dataclass
@@ -79,6 +80,8 @@ class QPUDevicePlugin:
         self._node_assignments: dict[str, str] = {}  # qpu_name → node_name
         self._stop_event = threading.Event()
         self._refresh_thread: threading.Thread | None = None
+        self._queue_processes: dict[str, multiprocessing.Process] = {}
+        self._queue_reconcile_interval = 30.0
 
     # ------------------------------------------------------------------
     # Registration
@@ -278,10 +281,82 @@ class QPUDevicePlugin:
         logger.info("Calibration refresh thread started (interval=%ds)",
                     self.CALIBRATION_REFRESH_INTERVAL)
 
+    def start_local_queue_controllers(
+        self,
+        *,
+        enabled: bool = True,
+        reconcile_interval: float = 30.0,
+    ) -> None:
+        """Start one node-local QPU queue controller process per local QPU."""
+        if not enabled:
+            logger.info("Local QPU queue controllers disabled")
+            return
+        if self.mode != "k8s":
+            logger.info(
+                "Local QPU queue controllers require k8s mode; skipping"
+            )
+            return
+        if self._queue_processes:
+            logger.info("Local QPU queue controllers already started")
+            return
+
+        self._queue_reconcile_interval = reconcile_interval
+        for qpu_name in sorted(self._qpus):
+            self._start_local_queue_controller(qpu_name, reconcile_interval)
+
+    def ensure_local_queue_controllers(self, *, enabled: bool = True) -> None:
+        """Restart missing per-QPU queue controller processes."""
+        if not enabled or self.mode != "k8s":
+            return
+        for qpu_name in sorted(self._qpus):
+            process = self._queue_processes.get(qpu_name)
+            if process is not None and process.is_alive():
+                continue
+            if process is not None:
+                logger.warning(
+                    "Local QPU queue controller for '%s' exited with code %s; restarting",
+                    qpu_name, process.exitcode,
+                )
+            self._start_local_queue_controller(
+                qpu_name, self._queue_reconcile_interval,
+            )
+
+    def _start_local_queue_controller(
+        self,
+        qpu_name: str,
+        reconcile_interval: float,
+    ) -> None:
+        process = multiprocessing.Process(
+            target=_run_local_qpu_queue_controller,
+            args=(self.mode, qpu_name, reconcile_interval),
+            name=f"qpu-queue-{qpu_name}",
+            daemon=True,
+        )
+        process.start()
+        self._queue_processes[qpu_name] = process
+        logger.info(
+            "Started local QPU queue controller for '%s' (pid=%s, interval=%.3fs)",
+            qpu_name, process.pid, reconcile_interval,
+        )
+
     def stop(self) -> None:
         self._stop_event.set()
         if self._refresh_thread:
             self._refresh_thread.join(timeout=5)
+        for process in self._queue_processes.values():
+            if process.is_alive():
+                logger.info(
+                    "Stopping local QPU queue controller pid=%s", process.pid,
+                )
+                process.terminate()
+        for process in self._queue_processes.values():
+            process.join(timeout=5)
+            if process.is_alive():
+                logger.warning(
+                    "Local QPU queue controller pid=%s did not stop cleanly",
+                    process.pid,
+                )
+        self._queue_processes.clear()
 
     def _calibration_loop(self) -> None:
         """Background loop: fetch calibration data, update System Monitor."""
@@ -352,6 +427,53 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "Invalid %s=%r; using %.3f", name, raw, default,
+        )
+        return default
+    if value <= 0:
+        logger.warning(
+            "Invalid %s=%r; using %.3f", name, raw, default,
+        )
+        return default
+    return value
+
+
+def _run_local_qpu_queue_controller(
+    mode: str,
+    qpu_name: str,
+    reconcile_interval: float,
+) -> None:
+    from src.operator.qpu_queue_controller import QPUQueueController
+    from src.utils.logging_config import configure_logging
+
+    configure_logging()
+    controller = QPUQueueController(
+        mode=mode,
+        managed_qpus={qpu_name},
+        reconcile_interval=reconcile_interval,
+        controller_id=f"device-plugin:{qpu_name}",
+    )
+    try:
+        controller.run()
+    except KeyboardInterrupt:
+        controller.stop()
+
+
 # ===================================================================
 # Standalone convenience
 # ===================================================================
@@ -384,10 +506,19 @@ def main() -> None:
         plugin.register_fake_backends_as_qpus(node_name=node_name)
     plugin.advertise_resources()
     plugin.start_calibration_refresh()
+    local_queue_enabled = _env_bool("QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE", True)
+    local_queue_interval = _env_float(
+        "QONDUCTOR_QPU_QUEUE_RECONCILE_INTERVAL", 30.0,
+    )
+    plugin.start_local_queue_controllers(
+        enabled=local_queue_enabled,
+        reconcile_interval=local_queue_interval,
+    )
 
     try:
         while True:
-            time.sleep(3600)
+            time.sleep(60)
+            plugin.ensure_local_queue_controllers(enabled=local_queue_enabled)
     except KeyboardInterrupt:
         plugin.stop()
 
