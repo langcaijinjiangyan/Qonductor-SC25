@@ -35,17 +35,18 @@
 #   SKIP_CONTROLLERS        skip operator/device-plugin deployment
 #   SKIP_FIREWALL           skip firewall port hints
 #   DRY_RUN                 print commands without executing
-#   OPERATOR_CPU_REQUEST    operator CPU request (default: 1)
-#   OPERATOR_MEMORY_REQUEST operator memory request (default: 1Gi)
-#   OPERATOR_CPU_LIMIT      operator CPU limit (default: 1)
-#   OPERATOR_MEMORY_LIMIT   operator memory limit (default: 1Gi)
-#   SCHEDULING_INTERVAL     quantum scheduler interval in seconds (default: 30)
-#   SCHEDULING_THRESHOLD    queue depth triggering scheduling (default: 10)
+#   OPERATOR_CPU_REQUEST    operator CPU request (default: 3)
+#   OPERATOR_MEMORY_REQUEST operator memory request (default: 2Gi)
+#   OPERATOR_CPU_LIMIT      operator CPU limit (default: 4)
+#   OPERATOR_MEMORY_LIMIT   operator memory limit (default: 4Gi)
+#   SCHEDULING_INTERVAL     quantum scheduler interval in seconds (default: 10)
+#   SCHEDULING_THRESHOLD    queue depth triggering scheduling (default: 1)
 #   SCHEDULING_BATCH_SIZE   maximum jobs per scheduling cycle (default: 120)
-#   TRANSPILATION_WORKERS   maximum parallel transpilation threads (default: 8)
+#   TRANSPILATION_WORKERS   maximum parallel transpilation threads (default: 2)
 #   TRANSPILATION_CACHE_ENABLED enable transpilation cache: 0 or 1 (default: 1)
 #   TRANSPILATION_CACHE_SIZE maximum cached circuit/backend templates (default: 256)
-#   QONDUCTOR_EXECUTION_BACKEND aer or offline-replay (default: aer)
+#   TRANSPILATION_COUNT     transpilation trials per circuit/backend pair (default: 1)
+#   QONDUCTOR_EXECUTION_BACKEND aer or offline-replay (default: offline-replay)
 #   OFFLINE_RESULTS_DB_SOURCE source SQLite path for offline-replay
 #   QONDUCTOR_OFFLINE_NOISE_MODEL_VERSION offline database noise-model key
 #   QONDUCTOR_ENABLE_LOCAL_QPU_QUEUE enable per-QPU queue controllers in device-plugin (default: 1)
@@ -64,7 +65,7 @@ DEPLOY_DIR="${PROJECT_ROOT}/deploy"
 
 # ---- Flags -------------------------------------------------------------------
 SKIP_FIREWALL="${SKIP_FIREWALL:-1}"
-SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-1s}"
+SKIP_IMAGE_DISTRIBUTE="${SKIP_IMAGE_DISTRIBUTE:-1}"
 SKIP_CONTAINERD_IMPORT="${SKIP_CONTAINERD_IMPORT:-0}"
 SKIP_CONTROLLERS="${SKIP_CONTROLLERS:-0}"
 DRY_RUN="${DRY_RUN:-0}"
@@ -263,14 +264,6 @@ _all_hosts() {
     for ((i = 0; i < AGENTS_COUNT; i++)); do
         local host_var="AGENTS_${i}_HOST"
         echo "${!host_var}"
-    done
-}
-
-_all_containers() {
-    echo "${SERVER_CONTAINERNAME}"
-    for ((i = 0; i < AGENTS_COUNT; i++)); do
-        local name_var="AGENTS_${i}_CONTAINERNAME"
-        echo "${!name_var}"
     done
 }
 

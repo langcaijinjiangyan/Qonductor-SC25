@@ -10,15 +10,15 @@
 #
 # Environment variables:
 #   CLEANUP_VOLUMES=0    skip removing Docker data volumes (default: 1)
-#   CLEANUP_IMAGES=0     skip removing Qonductor & k3s Docker images (default: 1)
-#   CLEANUP_REGISTRY=0   skip removing the local Docker registry container (default: 1)
-#   CLEANUP_RANCHER=0    skip removing /etc/rancher (default: 1, cleans stale passwords)
-#   CLEANUP_QONDUCTOR=0     skip removing /etc/qonductor (default: 1)
+#   CLEANUP_IMAGES=1     remove Qonductor Docker images (default: 0)
+#   CLEANUP_RANCHER=1    remove /etc/rancher (default: 0, cleans stale passwords)
+#   CLEANUP_QONDUCTOR=1     remove /etc/qonductor (default: 0)
 #   CLEANUP_QONDUCTOR_K8S=0 skip deleting Qonductor K8s workloads before teardown (default: 1)
-#   CLEANUP_REMOTE_IMAGES_TAR=0 skip removing remote /tmp/qonductor-images.tar (default: 1)
+#   CLEANUP_REMOTE_IMAGES_TAR=1 remove remote /tmp/qonductor-images.tar (default: 0)
 #   CLEANUP_DEPLOY_LOGS=0   skip removing data/deploy_logs (default: 1)
 #   CLEANUP_KUBECONFIG_TMP=0 skip removing /tmp/k3s-multi-host-config.yaml (default: 1)
 #   CLEANUP_IMAGES_TAR=1    remove docker/multi-host/images.tar (default: 0, preserve input bundle)
+#   REMOTE_IMAGES_TAR       remote image-bundle path used by deploy (default: /tmp/qonductor-images.tar)
 #   DRY_RUN=1               print commands without executing
 # ============================================================================
 
@@ -29,7 +29,6 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CLUSTER_CONFIG="${SCRIPT_DIR}/cluster-config.yaml"
 
 CLEANUP_VOLUMES="${CLEANUP_VOLUMES:-1}"
-CLEANUP_REGISTRY="${CLEANUP_REGISTRY:-1}"
 CLEANUP_IMAGES="${CLEANUP_IMAGES:-0}"
 CLEANUP_RANCHER="${CLEANUP_RANCHER:-0}"
 CLEANUP_QONDUCTOR="${CLEANUP_QONDUCTOR:-0}"
@@ -319,79 +318,12 @@ QONDUCTOR_IMAGE_NAMES=(
     "qonductor-quantum-executor:latest"
 )
 
-# k3s infrastructure images (mirrors deploy-cluster.sh _K3S_INFRA_IMAGES).
-# These are pulled and distributed to every host during deployment.
-K3S_INFRA_IMAGE_NAMES=(
-    "rancher/mirrored-pause:3.6"
-    "rancher/mirrored-coredns-coredns:1.12.0"
-    "rancher/mirrored-library-traefik:2.11.10"
-    "rancher/local-path-provisioner:v0.0.30"
-    "rancher/mirrored-metrics-server:v0.7.2"
-    "rancher/klipper-helm:v0.9.3-build20241008"
-    "rancher/klipper-lb:v0.4.9"
-)
-
-# Images that should NEVER be removed during teardown (k3s core components).
-# These are the essential k3s infrastructure images that must remain on each host
-# to allow the cluster to restart without re-pulling.
-K3S_PRESERVE_IMAGE_NAMES=(
-    "rancher/k3s:v1.32.0-k3s1"
-    "rancher/klipper-helm:v0.9.3-build20241008"
-    "rancher/klipper-lb:v0.4.9"
-    "rancher/local-path-provisioner:v0.0.30"
-    "rancher/mirrored-coredns-coredns:1.12.0"
-    "rancher/mirrored-library-traefik:2.11.10"
-    "rancher/mirrored-metrics-server:v0.7.2"
-    "rancher/mirrored-pause:3.6"
-)
-
-# Check if an image name is in the preserve list.
-_is_preserved_image() {
-    local img="$1"
-    for preserved in "${K3S_PRESERVE_IMAGE_NAMES[@]}"; do
-        [[ "$img" == "$preserved" ]] && return 0
-    done
-    return 1
-}
-
 remove_images_on_host() {
     local host="$1"
-    local k3s_image="rancher/k3s:${CLUSTER_KUBERNETESVERSION}"
 
     log "Removing Qonductor images on ${host} …"
 
     for img in "${QONDUCTOR_IMAGE_NAMES[@]}"; do
-        if _remote "$host" "docker image inspect '${img}' >/dev/null 2>&1"; then
-            if [[ "$DRY_RUN" == "1" ]]; then
-                echo "  [dry-run] Remove image ${img} on ${host}"
-            else
-                _remote "$host" "docker rmi '${img}' 2>/dev/null || docker rmi -f '${img}' 2>/dev/null || true"
-                log "  ✓ ${img} removed"
-            fi
-        else
-            log "  ${img} not found — skipping"
-        fi
-    done
-
-    # Also remove the k3s base image if present (unless preserved).
-    if _is_preserved_image "$k3s_image"; then
-        log "  ${k3s_image} is preserved — skipping"
-    elif _remote "$host" "docker image inspect '${k3s_image}' >/dev/null 2>&1"; then
-        if [[ "$DRY_RUN" == "1" ]]; then
-            echo "  [dry-run] Remove image ${k3s_image} on ${host}"
-        else
-            _remote "$host" "docker rmi '${k3s_image}' 2>/dev/null || docker rmi -f '${k3s_image}' 2>/dev/null || true"
-            log "  ✓ ${k3s_image} removed"
-        fi
-    fi
-
-    # Remove k3s infrastructure images (pause, coredns, traefik, etc.).
-    log "Removing k3s infrastructure images on ${host} …"
-    for img in "${K3S_INFRA_IMAGE_NAMES[@]}"; do
-        if _is_preserved_image "$img"; then
-            log "  ${img} is preserved — skipping"
-            continue
-        fi
         if _remote "$host" "docker image inspect '${img}' >/dev/null 2>&1"; then
             if [[ "$DRY_RUN" == "1" ]]; then
                 echo "  [dry-run] Remove image ${img} on ${host}"
@@ -479,30 +411,6 @@ main() {
         for host in "${all_hosts[@]}"; do
             remove_images_on_host "$host"
         done
-        # Also clean up local images.
-        log "Removing Qonductor images locally …"
-        for img in "${QONDUCTOR_IMAGE_NAMES[@]}"; do
-            if docker image inspect "$img" >/dev/null 2>&1; then
-                if [[ "$DRY_RUN" == "1" ]]; then
-                    echo "  [dry-run] Remove local image ${img}"
-                else
-                    docker rmi "$img" 2>/dev/null || docker rmi -f "$img" 2>/dev/null || true
-                    log "  ✓ ${img} removed locally"
-                fi
-            fi
-        done
-    fi
-
-    # ---- Optional: stop local registry --------------------------------------
-    if [[ "$CLEANUP_REGISTRY" == "1" ]]; then
-        log "Stopping local Docker registry …"
-        if [[ "$DRY_RUN" == "1" ]]; then
-            echo "  [dry-run] Stop + remove registry on ${server_host}"
-        else
-            _remote "$server_host" "docker stop registry 2>/dev/null || true"
-            _remote "$server_host" "docker rm -f registry 2>/dev/null || true"
-            remove_volume "$server_host" "registry-data"
-        fi
     fi
 
     # ---- Clean kubeconfig ---------------------------------------------------

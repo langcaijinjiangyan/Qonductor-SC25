@@ -95,7 +95,7 @@ kubectl get hybridworkflows -w
 ### 4. Tear down
 
 ```bash
-# Clean cluster state; preserves docker/multi-host/images.tar by default
+# Tear down the cluster; preserves host state, Docker images, and images.tar by default
 bash docker/multi-host/teardown-cluster.sh
 
 # Stop containers but preserve Docker data volumes
@@ -120,7 +120,7 @@ CLEANUP_VOLUMES=0 bash docker/multi-host/teardown-cluster.sh
 | `SKIP_FIREWALL` | `1` | Skip firewall port hints |
 | `IMAGES_TAR` | `docker/multi-host/images.tar` | Image bundle used by deployment |
 | `REMOTE_IMAGES_TAR` | `/tmp/qonductor-images.tar` | Remote path used when copying the image bundle |
-| `SKIP_IMAGE_DISTRIBUTE` | `0` | Skip copying/loading `images.tar` on remote hosts |
+| `SKIP_IMAGE_DISTRIBUTE` | `1` | Skip copying/loading `images.tar` on remote hosts |
 | `SKIP_CONTAINERD_IMPORT` | `0` | Skip importing loaded Docker images into k3s containerd |
 | `SKIP_CONTROLLERS` | `0` | Skip operator/device-plugin deployment |
 | `DRY_RUN` | `0` | Print commands without executing |
@@ -130,15 +130,15 @@ CLEANUP_VOLUMES=0 bash docker/multi-host/teardown-cluster.sh
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CLEANUP_VOLUMES` | `1` | Remove k3s Docker data volumes |
-| `CLEANUP_IMAGES` | `1` | Remove Qonductor Docker images |
-| `CLEANUP_REGISTRY` | `1` | Remove local Docker registry container/volume |
-| `CLEANUP_RANCHER` | `1` | Remove host `/etc/rancher` k3s state |
-| `CLEANUP_QONDUCTOR` | `1` | Remove host `/etc/qonductor` QPU/offline state |
+| `CLEANUP_IMAGES` | `0` | Remove Qonductor Docker images |
+| `CLEANUP_RANCHER` | `0` | Remove host `/etc/rancher` k3s state |
+| `CLEANUP_QONDUCTOR` | `0` | Remove host `/etc/qonductor` QPU/offline state |
 | `CLEANUP_QONDUCTOR_K8S` | `1` | Delete Qonductor K8s resources before teardown |
-| `CLEANUP_REMOTE_IMAGES_TAR` | `1` | Remove distributed `/tmp/qonductor-images.tar` copies |
+| `CLEANUP_REMOTE_IMAGES_TAR` | `0` | Remove distributed `/tmp/qonductor-images.tar` copies |
 | `CLEANUP_DEPLOY_LOGS` | `1` | Remove local `data/deploy_logs` |
 | `CLEANUP_KUBECONFIG_TMP` | `1` | Remove local `/tmp/k3s-multi-host-config.yaml` |
 | `CLEANUP_IMAGES_TAR` | `0` | Remove local `docker/multi-host/images.tar` |
+| `REMOTE_IMAGES_TAR` | `/tmp/qonductor-images.tar` | Distributed bundle path to remove when cleanup is enabled |
 | `DRY_RUN` | `0` | Print commands without executing |
 
 ### offline-pack.sh
